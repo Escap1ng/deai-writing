@@ -119,5 +119,5 @@ python3 code/selfcheck.py       # 跑回归，确认全部断言仍通过
 
 本仓库在上游之上的增量是中文词表规则、结构级与字符级两道门禁，以及把正反例固化成断言的 `code/selfcheck.py`。
 
-**许可**：本仓库以 [MIT](LICENSE) 发布。再分发时请一并保留上游声明：上游 MIT 全文在 `docs/no-ai-slop-reference.md` 内，字符集来源标注在 `code/strip_invisible.py` 头部。
+**许可**：本仓库以 [MIT](LICENSE) 发布。再分发时请一并保留上游声明：上游 MIT 全文在 `docs/no-ai-slop-reference.md` 内，字符集相关的上游版权与许可全文在 `code/strip_invisible.py` 头部。
 

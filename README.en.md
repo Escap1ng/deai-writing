@@ -119,4 +119,4 @@ Taken: the invisible-character set and the IVD protection logic in `code/strip_i
 
 What this repository adds on top: the Chinese word-list rules, the structural and character gates, and `code/selfcheck.py`, which pins the fixtures down as assertions.
 
-**License**: this repository is released under [MIT](LICENSE). Keep the upstream notices when you redistribute it. The full upstream MIT text sits in `docs/no-ai-slop-reference.md`, and the character-set source is credited in the header of `code/strip_invisible.py`.
+**License**: this repository is released under [MIT](LICENSE). Keep the upstream notices when you redistribute it. The full upstream MIT text for the slop taxonomy sits in `docs/no-ai-slop-reference.md`, and the upstream copyright and license covering the character set are reproduced in the header of `code/strip_invisible.py`.
