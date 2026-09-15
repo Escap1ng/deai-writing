@@ -4,8 +4,10 @@
     python3 code/check_phrasing.py draft/draft.tex            # 只报不改，命中即退出 1
     python3 code/check_phrasing.py draft/*.tex --json         # 机器可读输出
     python3 code/check_phrasing.py --list-rules               # 查看词表与规则
+    python3 code/check_phrasing.py draft.md --lang en         # 英文提示、英文规则标签与改法
 
 规则表是数据：`code/phrasing-blacklist.json`（单一来源，加词只改它）。
+规则条目除 `label`/`why`/`fix` 外另有 `label_en`/`why_en`/`fix_en`，由 `--lang` 选择，缺失时回退中文。
 `max_per_document` 是频次上限，**超出部分才算命中**——例如全文用一次「综上所述」可接受，堆砌则会被报出。
 
 跳过范围：围栏代码块与行内代码跨度（反引号包裹）。因此规范文档里写成行内代码的反例不会被误报，
@@ -37,6 +39,8 @@ MSG = {
         "summary_ok": "检查 {files} 个文件，未命中任何 AI 痕迹（词表：{rules} 条规则）",
         "freq": "（第 {n} 次出现，超过上限 {max}）",
         "list_header": "规则表（{count} 条）",
+        "limit_note": "（≤{limit}/篇）",
+        "fix_label": "改法：",
     },
     "en": {
         "missing": "Word list missing or corrupt: {path}",
@@ -48,6 +52,8 @@ MSG = {
         "summary_ok": "Checked {files} file(s); no AI-slop patterns found (word list: {rules} rules)",
         "freq": " (occurrence #{n}, over the limit of {max})",
         "list_header": "Word list ({count} rules)",
+        "limit_note": " (max {limit}/doc)",
+        "fix_label": "Fix: ",
     },
 }
 
@@ -64,6 +70,9 @@ def load_blacklist(lang: str) -> dict:
     for rule in data["rules"]:
         rule.setdefault("severity", "medium")
         rule.setdefault("max_per_document", DEFAULT_MAX)
+        # 按 --lang 取词：优先 label_en/why_en/fix_en，缺失则回退中文原字段
+        for key in ("label", "why", "fix"):
+            rule[f"_{key}"] = rule.get(f"{key}_{lang}") or rule.get(key, "")
         # 预编译：词表写错正则应报错，而不是静默跳过
         rule["_compiled"] = [re.compile(pattern) for pattern in rule["patterns"]]
     return data
@@ -100,12 +109,12 @@ def scan_file(path: Path, rules: list[dict]) -> list[dict]:
                         continue
                     hits.append({
                         "rule": rule["id"],
-                        "label": rule["label"],
+                        "label": rule["_label"],
                         "severity": rule["severity"],
                         "line": lineno,
                         "col": match.start() + 1,
                         "text": match.group(0),
-                        "fix": rule.get("fix", ""),
+                        "fix": rule["_fix"],
                     })
     return hits
 
@@ -147,10 +156,10 @@ def main() -> None:
         print(MSG[lang]["list_header"].format(count=len(rules)))
         for rule in rules:
             limit = rule.get("max_per_document", DEFAULT_MAX)
-            limit_note = f"（≤{limit}/篇）" if limit else ""
-            print(f"- {rule['id']:<20} {rule['label']}{limit_note}")
-            print(f"    {rule.get('why', '')}")
-            print(f"    改法：{rule.get('fix', '')}")
+            limit_note = MSG[lang]["limit_note"].format(limit=limit) if limit else ""
+            print(f"- {rule['id']:<20} {rule['_label']}{limit_note}")
+            print(f"    {rule['_why']}")
+            print(f"    {MSG[lang]['fix_label']}{rule['_fix']}")
         return
 
     if not args.paths:

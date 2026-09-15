@@ -70,6 +70,7 @@ python3 code/check_style.py draft.md                   # 结构级：命中即�
 python3 code/strip_invisible.py --clean draft.tex      # 字符级：就地清理并留 .bak
 python3 code/check_phrasing.py --list-rules            # 查看词表规则与改法
 python3 code/check_style.py --list-metrics             # 查看结构指标与阈值
+python3 code/check_phrasing.py draft.md --lang en      # 英文提示、英文规则标签与改法
 ```
 
 带 `max_per_document` 的是频次上限，超出上限的部分才算命中。结构级风险等级为「高」或「极高」时不得交付。最终 PDF 与 Word 必须清理后复检，复检仍报 `CLEANED-RESIDUAL` 不得交付。
@@ -126,7 +127,7 @@ deai-writing/
 新增规则或清理规则集的交付清单：
 
 ```
-code/phrasing-blacklist.json    # 在 rules 里加一条（id/label/severity/why/fix/patterns/max_per_document）
+code/phrasing-blacklist.json    # 在 rules 里加一条（id/label/severity/why/fix/patterns/max_per_document，另配 label_en/why_en/fix_en）
 docs/deai-rules.md              # 对应补一行说明（反例写成行内代码，检查器会跳过，故文档可自检）
 examples/                       # 必要时补正例或反例 fixture
 python3 code/selfcheck.py       # 跑回归，确认全部断言仍通过

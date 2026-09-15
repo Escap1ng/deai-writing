@@ -1,20 +1,24 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "locale": "zh",
   "title": "去 AI 痕迹词表与句式规则",
-  "description": "降 AI 技能的第一道关（词表级）。规则以正则匹配，命中即需改写；带 max_per_document 的规则是频次上限，超出部分才算命中（例如全文用一次「综上所述」可接受，堆砌则不行）。中英双语：英文规则（en-slop-*）用于英文稿件，整理自 petergyang/no-ai-slop，见 docs/no-ai-slop-reference.md。词表是数据：加词只改本文件，检查器与文档同步生效。",
+  "description": "降 AI 技能的第一道关（词表级）。规则以正则匹配，命中即需改写；带 max_per_document 的规则是频次上限，超出部分才算命中（例如全文用一次「综上所述」可接受，堆砌则不行）。中英双语：规则本身同时覆盖中文与英文；英文规则（en-slop-*）面向英文稿件，整理自 petergyang/no-ai-slop，见 docs/no-ai-slop-reference.md。每条规则除 label/why/fix 外另有 label_en/why_en/fix_en，由 check_phrasing.py --lang 选择，缺英文时回退中文。词表是数据：加词只改本文件，检查器与文档同步生效。",
   "usage": {
-    "checker": "python3 code/check_phrasing.py <文件...> [--json] [--list-rules]",
+    "checker": "python3 code/check_phrasing.py <文件...> [--json] [--list-rules] [--lang zh|en]",
     "skipped_regions": "围栏代码块与行内代码跨度（反引号包裹），故规范文档里的反例不会被误报",
-    "exit_codes": "0 通过 / 1 有命中 / 2 用法或环境错误"
+    "exit_codes": "0 通过 / 1 有命中 / 2 用法或环境错误",
+    "message_language": "--lang zh|en 决定提示文案、规则标签与改法的语言；缺少对应英文时回退中文。JSON 导出同时保留中英字段"
   },
   "rules": [
     {
       "id": "template-opener",
       "label": "模板腔开头",
+      "label_en": "Template opener",
       "severity": "high",
       "why": "背景章以空泛的时代叙事开场，是 AI 写作最典型的痕迹，也最容易让评委判定「没读透题目」",
+      "why_en": "Opening a section with a vague era narrative is the most typical AI habit, and it signals that the writer never engaged with the actual material.",
       "fix": "以本题的具体矛盾、关键数字或经核实的文献切入，直入主题",
+      "fix_en": "Open on a concrete tension, a key number, or a verified source that bears on this piece.",
       "patterns": [
         "随着[^。；\\n]{0,18}(的)?(快速|迅猛|不断|持续|日益)?(发展|推进|兴起|普及|推广)",
         "在当今(社会|时代|信息时代|背景下)",
@@ -26,9 +30,12 @@
     {
       "id": "transition-abuse",
       "label": "过渡词滥用",
+      "label_en": "Transition-word abuse",
       "severity": "high",
       "why": "靠「综上所述」「值得注意的是」串段落，段落之间没有信息量，读起来像模板拼装",
+      "why_en": "Chaining paragraphs with stock connectors puts no information between them; the text reads like assembled boilerplate.",
       "fix": "用信息量衔接替代：呼应上文的结论或点明下文的实质任务",
+      "fix_en": "Use a connective sentence that carries information: echo the previous conclusion or name the next task.",
       "patterns": [
         "综上所述",
         "总而言之",
@@ -40,9 +47,12 @@
     {
       "id": "connector-sequence",
       "label": "连接词链堆砌",
+      "label_en": "Connector chain",
       "severity": "medium",
       "why": "「首先…其次…再者…最后」成体系出现是机器行文特征；规范只允许在一处求解流程内部使用一次",
+      "why_en": "A full first / second / moreover / finally chain is a machine-writing habit; the rulebook allows one such chain per document.",
       "fix": "连接链全文至多一组，且只用于单一求解流程的步骤引导；问与问之间改用信息量衔接",
+      "fix_en": "Keep at most one chain, and only to step through a single procedure; link sections with information-bearing sentences.",
       "patterns": [
         "首先",
         "其次",
@@ -54,9 +64,12 @@
     {
       "id": "empty-elevation",
       "label": "泛化升华",
+      "label_en": "Empty elevation",
       "severity": "high",
       "why": "「具有重要意义」「填补空白」这类收尾不携带任何本题信息，是典型的套话",
+      "why_en": "Closers such as 'of great significance' or 'fills a gap' carry no information specific to this piece.",
       "fix": "落到具体场景、具体数值或具体迁移条件",
+      "fix_en": "Land on a concrete scenario, a concrete number, or a concrete condition for reuse elsewhere.",
       "patterns": [
         "具有[^。\\n]{0,6}(重要|重大|深远)[^。\\n]{0,8}意义",
         "具有(一定的)?(实际|参考|指导)价值",
@@ -69,9 +82,12 @@
     {
       "id": "vague-result",
       "label": "模板腔结果表述",
+      "label_en": "Vague result claim",
       "severity": "high",
       "why": "用「较为理想」「效果较好」描述结果，等于没给结论；论文、报告等长文的结果必须是数值与对比",
+      "why_en": "Describing a result as 'fairly good' gives the reader no result; papers and reports need numbers and a baseline.",
       "fix": "改为具体数值 + 对比基准（如「较基准方案下降 12.4%」）",
+      "fix_en": "State the number plus the baseline, for example '12.4% below the baseline plan'.",
       "patterns": [
         "较为理想",
         "效果(很|较|非常)好",
@@ -83,9 +99,12 @@
     {
       "id": "unsupported-claim",
       "label": "无依据断言",
+      "label_en": "Unsupported assertion",
       "severity": "medium",
       "why": "「很明显」「大量数据表明」没有指向任何数据或文献，属于空泛表达",
+      "why_en": "Phrases such as 'clearly' or 'plenty of data shows' point at no data and no source.",
       "fix": "补上具体数值、图表编号或文献引用；补不上就删掉",
+      "fix_en": "Add the number, the figure or table number, or the citation; if you cannot, cut the sentence.",
       "patterns": [
         "很明显|显而易见|毋庸置疑",
         "大量(的)?(数据|实验|研究|实践)(表明|证明|显示)",
@@ -96,9 +115,12 @@
     {
       "id": "vague-hedge",
       "label": "含糊词",
+      "label_en": "Vague hedge",
       "severity": "high",
       "why": "结论含含糊糊，评委无法据此判分；确属不确定时必须给区间或条件",
+      "why_en": "A hedged conclusion leaves the reader unable to judge the claim; real uncertainty needs a range or a condition.",
       "fix": "给出区间、条件或阈值；无法量化就改写成明确的适用边界",
+      "fix_en": "Give the interval, condition or threshold, or state the boundary of validity plainly.",
       "patterns": [
         "一定程度上",
         "或许|大概|也许",
@@ -110,9 +132,12 @@
     {
       "id": "fake-authority",
       "label": "权威含糊（须给引用）",
+      "label_en": "Unattributed authority",
       "severity": "high",
       "why": "「研究表明」「专家认为」不给出处，既像 AI 编的，也触碰反造假红线",
+      "why_en": "'Studies show' or 'experts believe' with no citation reads as invented and crosses the anti-fabrication line.",
       "fix": "补上可核实的文献出处；找不到出处就删掉该论据（宁缺毋假）",
+      "fix_en": "Name a verifiable source; if none exists, delete the claim rather than dress it up.",
       "patterns": [
         "研究表明",
         "专家(认为|表示|指出)",
@@ -123,9 +148,12 @@
     {
       "id": "colloquial-subjective",
       "label": "口语化主观",
+      "label_en": "Colloquial first person",
       "severity": "high",
       "why": "第一人称主观或口语词破坏学术语态",
+      "why_en": "First-person opinion and casual wording break the register the document needs.",
       "fix": "改用「本文」「该模型」「求解结果显示」作主语",
+      "fix_en": "Use the document, the model or the result as the subject instead of the writer.",
       "patterns": [
         "我觉得|我认为大概|我们认为大概",
         "其实[，,]",
@@ -137,9 +165,12 @@
     {
       "id": "binary-contrast",
       "label": "二元对照句式",
+      "label_en": "Binary contrast",
       "severity": "medium",
       "why": "「不是…而是…」被高频复用后成为公式化修辞（英文写作中的 not X but Y）",
+      "why_en": "Repeated 'not X but Y' framing turns into a formulaic rhetorical tic.",
       "fix": "直接陈述结论，或用数据对比代替修辞对比；同一段落不连用",
+      "fix_en": "State the conclusion directly, or compare numbers instead of rhetoric; never stack two in one paragraph.",
       "patterns": [
         "不是[^。\\n]{0,20}而是",
         "并非[^。\\n]{0,20}而是"
@@ -149,9 +180,12 @@
     {
       "id": "colon-reveal",
       "label": "冒号揭晓",
+      "label_en": "Colon reveal",
       "severity": "medium",
       "why": "「最关键的一点：…」是先卖关子再揭晓的网文笔法，不是学术表述",
+      "why_en": "A noun phrase, a colon, then a dramatic lowercase payoff is web-copy suspense rather than plain exposition.",
       "fix": "把结论前置，直接在主句里说出来",
+      "fix_en": "Put the conclusion in the main clause and say it outright.",
       "patterns": [
         "最(好|关键|重要|核心)的(部分|一点|地方)[:：]"
       ],
@@ -160,9 +194,12 @@
     {
       "id": "faux-insight",
       "label": "伪洞察开场",
+      "label_en": "Faux-insight opener",
       "severity": "high",
       "why": "「很少有人告诉你」「大家都忽略的是」以制造悬念代替论证",
+      "why_en": "'Few people tell you' or 'what everyone ignores' builds suspense in place of an argument.",
       "fix": "删掉悬念铺垫，直接给出问题与依据",
+      "fix_en": "Cut the suspense and state the problem together with its evidence.",
       "patterns": [
         "(很少有人|没人|没有人)(告诉|提到|注意|意识)",
         "大家(都)?忽略的是"
@@ -172,9 +209,12 @@
     {
       "id": "fake-profound-end",
       "label": "虚假深刻收尾",
+      "label_en": "Fake-profound ending",
       "severity": "medium",
       "why": "「未来已来」式格言收尾不承担论证功能",
+      "why_en": "An aphoristic closer such as 'the future is already here' carries no argumentative weight.",
       "fix": "收尾回到本题结论、适用边界或下一步的具体难点",
+      "fix_en": "End on this piece's conclusion, its boundary of validity, or the next concrete difficulty.",
       "patterns": [
         "未来已来",
         "这只是(开始|第一步)",
@@ -185,9 +225,12 @@
     {
       "id": "empty-adjective",
       "label": "空泛形容词/程度堆砌",
+      "label_en": "Empty adjectives and intensifiers",
       "severity": "high",
       "why": "「至关重要」「极其重要」「显著提升」这类评价词不携带本题信息，等于用形容词代替结论",
+      "why_en": "Evaluative words such as 'crucial' or 'significantly improved' substitute adjectives for a conclusion and say nothing about this subject.",
       "fix": "删掉评价词，改为与本题直接相关的专业表述，并补上具体数值或机制",
+      "fix_en": "Drop the evaluation and state the professional claim with its number or mechanism.",
       "patterns": [
         "至关重要|举足轻重|重中之重",
         "(十分|非常|极其|极为|尤为|格外)(重要|关键|突出|显著|优异)",
@@ -200,9 +243,12 @@
     {
       "id": "verbose-connective",
       "label": "冗长连接/铺垫语",
+      "label_en": "Verbose connective",
       "severity": "medium",
       "why": "「简而言之」「从某种意义上说」「不得不说」是为过渡而过渡，删掉后信息量不变",
+      "why_en": "'In short' or 'so to speak' exist only to bridge; remove them and the information is unchanged.",
       "fix": "直接进入内容，或改用携带信息的衔接句（呼应上问结论、点明下问任务）",
+      "fix_en": "Go straight into the content, or use a connective that carries information.",
       "patterns": [
         "简而言之|一言以蔽之|总而言之",
         "总的来说|总体来看|整体而言",
@@ -213,9 +259,12 @@
     {
       "id": "template-purpose",
       "label": "模板化目的句",
+      "label_en": "Template purpose clause",
       "severity": "medium",
       "why": "「为了更好地…」「旨在…」「以期…」是模板腔的目的铺陈，常与后文实际做法重复",
+      "why_en": "'In order to better ...' is a stock purpose preamble that usually repeats what the next sentence already says.",
       "fix": "直接陈述做法与目标，或点明具体要解决的矛盾",
+      "fix_en": "State the method and the goal directly, or name the specific tension being resolved.",
       "patterns": [
         "为了更好地[^。\\n]{0,14}",
         "旨在[^。\\n]{0,14}",
@@ -226,9 +275,12 @@
     {
       "id": "en-slop-word",
       "label": "英文套词/夸大词",
+      "label_en": "Inflated English word",
       "severity": "high",
       "why": "delve/leverage/streamline/cutting-edge 等是英文 AI 写作最典型的空洞词，替换成具体动作或事实即可",
-      "fix": "改为具体动词与事实（leverage→use、streamline→cut steps、cutting-edge→new）；仅在英文摘要/图注中检查",
+      "why_en": "delve, leverage, streamline and cutting-edge are the emptiest words in AI-written English; a concrete action or fact replaces them.",
+      "fix": "改为具体动词与事实（leverage→use、streamline→cut steps、cutting-edge→new）",
+      "fix_en": "Use a concrete verb or fact: leverage becomes use, streamline becomes cut steps, cutting-edge becomes new.",
       "patterns": [
         "(?i)\\b(delve|foster|leverage|utilize|facilitate|empower|streamline|cutting[- ]edge|paradigm shift|game[- ]chang(er|ing)|tapestry|realm|beacon|multifaceted|meticulous|intricate|paramount|transformative|elevate|embark|supercharge|harness|ever[- ]evolving)\\b"
       ],
@@ -237,9 +289,12 @@
     {
       "id": "en-slop-phrase",
       "label": "英文空话/铺垫语",
+      "label_en": "English filler phrase",
       "severity": "medium",
       "why": "it's worth noting / here's the thing / in other words 等短语拖后结论、不携带信息（整理自 no-ai-slop）",
+      "why_en": "Phrases such as 'it's worth noting' or 'here's the thing' push the conclusion back and carry no information.",
       "fix": "删掉铺垫直接说结论；确需过渡时用携带信息的句子替代",
+      "fix_en": "Delete the preamble and state the conclusion; if a transition is needed, make it carry information.",
       "patterns": [
         "(?i)(it'?s worth noting|it is important to note|at the end of the day|when it comes to|at its core|in today'?s world|in the age of|in the world of|the reality is|the truth is|going forward|let'?s dive in|here'?s the thing|let me be clear|i'?ll be honest|the uncomfortable truth is|that last part matters|as you can see|the key point is|this distinction matters|in other words)"
       ],
@@ -248,9 +303,12 @@
     {
       "id": "en-slop-pattern",
       "label": "英文 slop 句式",
+      "label_en": "English slop pattern",
       "severity": "high",
       "why": "二元对照、伪洞察、无出处断言、夸大意义与复述式收尾，均为 AI 英语写作的标志性句式（整理自 no-ai-slop）",
+      "why_en": "Binary contrasts, faux insight, unsourced assertions, inflated significance and recap endings are the signature sentence shapes of AI English.",
       "fix": "直接陈述结论、点名出处、给出事实；收尾停在最后一个具体结论上",
+      "fix_en": "State the conclusion, name the source, give the fact; stop on the last concrete point.",
       "patterns": [
         "(?i)(it'?s not (just )?[^.;!?\\n]{0,40}[.,;]?\\s*it'?s|isn'?t [^.;!?\\n]{0,40}[.,;]?\\s*it'?s)",
         "(?i)((most people|everyone) (skip|get wrong|miss)|(nobody|no one) tells you|what nobody tells you|the part (everyone|most people) (miss|skips))",
@@ -263,9 +321,12 @@
     {
       "id": "formatting-slop",
       "label": "格式装饰（中英通用）",
+      "label_en": "Formatting decoration (Chinese and English)",
       "severity": "medium",
       "why": "标题里塞 emoji、正文用表情符号当项目符号、连续 emoji 堆砌，都是用装饰代替内容；中英文稿件都会出现，英文里同时破坏正式语域",
+      "why_en": "Emoji in headings, emoji as bullets and runs of emoji substitute decoration for content in both languages; in English they also break the formal register.",
       "fix": "删掉 emoji 与表情符号，标题用文字表达层级；强调靠事实与数据，不靠符号；格式跟随内容，不装饰内容",
+      "fix_en": "Remove the emoji and let headings carry the hierarchy in words; emphasis comes from facts and numbers, not symbols.",
       "patterns": [
         "^#{1,6}[^\\n]*[\\U0001F000-\\U0001FAFF\\u2600-\\u27BF]",
         "^[\\s>*+\\-]*[\\U0001F000-\\U0001FAFF]",
@@ -276,9 +337,12 @@
     {
       "id": "em-dash-cluster",
       "label": "破折号堆砌（中英通用）",
+      "label_en": "Dashes as a rhythm crutch (Chinese and English)",
       "severity": "low",
       "why": "把破折号当节奏拐杖：英文里用带空格的 em dash 串句子，中文里连写多个破折号，都是靠标点制造语气，属于装饰性用法",
+      "why_en": "Leaning on dashes for rhythm, spaced em dashes in English or repeated dashes in Chinese, is decorative punctuation rather than structure.",
       "fix": "删掉装饰性破折号，改用逗号、句号或括号拆句；中文一个破折号写作「——」，不要连写；长文里带空格的 em dash 全文不超过 4 处",
+      "fix_en": "Cut the decorative dashes and use commas, full stops or parentheses; keep spaced em dashes under four per long draft.",
       "patterns": [
         "—{2,}",
         "\\s—\\s"

@@ -160,12 +160,14 @@ python3 code/strip_invisible.py --clean --no-backup FILE...
 python3 code/check_phrasing.py draft.tex                 # 只报不改，命中即退出 1
 python3 code/check_phrasing.py draft*.tex --json         # 机器可读输出
 python3 code/check_phrasing.py --list-rules              # 查看词表与规则
+python3 code/check_phrasing.py draft.md --lang en        # 英文提示、英文规则标签与改法
 ```
 
 - **频次上限**：带 `max_per_document` 的规则是频次上限，**超出部分才算命中**，例如全文用一次 `综上所述` 可接受，堆砌则会被报出
 - **跳过范围**：围栏代码块与行内代码跨度（反引号包裹），故本文件里写成行内代码的反例不会被误报，检查器可直接扫本技能文档做自检
 - **退出码**：`0` 通过 / `1` 有命中 / `2` 用法或环境错误（与 `strip_invisible.py`、`check_style.py` 语义一致）
-- **扩词流程**：在 `phrasing-blacklist.json` 的 `rules` 中新增一条（`id`/`label`/`severity`/`why`/`fix`/`patterns`/`max_per_document`），正则为 Python `re` 语法；本文件对应补一行说明
+- **语言开关**：`--lang en` 让提示文案、规则标签与改法改走英文字段（`label_en`/`why_en`/`fix_en`），缺英文时自动回退中文；`check_style.py` 的 `--json` 里 `risk` 恒为中文本地化等级（低/中/高/极高），不随 `--lang` 变化，便于脚本稳定匹配
+- **扩词流程**：在 `phrasing-blacklist.json` 的 `rules` 中新增一条（`id`/`label`/`severity`/`why`/`fix`/`patterns`/`max_per_document`），正则为 Python `re` 语法；同时给出 `label_en`/`why_en`/`fix_en` 三个英文字段（`check_style.py` 的 `METRICS` 同此约定，缺失时回退中文）；本文件对应补一行说明
 - **结构级示例**：`examples/` 下的中文结构级反例供 `check_style.py` 冒烟（应命中多项指标），中文正例应两检查器零命中；结构级指标阈值写在脚本头部常量，调整阈值即调 CI 与文档口径，故改动需同步本文件 6.1
 - **英文规则**：词表含 `en-slop-word` / `en-slop-phrase` / `en-slop-pattern`，面向英文稿件（摘要、正文、图注、对外稿），模式清单与来源见 [no-ai-slop-reference.md](no-ai-slop-reference.md)；中英各配正反例样本供冒烟
 - **中英通用规则**：`formatting-slop`（格式装饰）与 `em-dash-cluster`（破折号堆砌）同时覆盖中文与英文写法，中英两种排版习惯的命中模式写在同一组 `patterns` 里

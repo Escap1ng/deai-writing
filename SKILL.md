@@ -37,6 +37,7 @@ python3 code/check_phrasing.py article.md                 # 词表级：命中�
 python3 code/check_style.py article.md                    # 结构级：命中即退出 1
 python3 code/check_phrasing.py --list-rules                # 查看词表规则与改法
 python3 code/check_style.py --list-metrics                 # 查看结构指标与阈值
+python3 code/check_phrasing.py article.md --lang en        # 英文稿件：英文提示、标签与改法
 ```
 
 命中处按输出里 `→` 之后的改法提示改写：补具体数值、补可核实出处、拆长句、拉开相邻段落字数差。改完复检，两个检查器都要退出 0。词表规则里带 `max_per_document` 的是频次上限（按文件统计），超出上限的部分才算命中，例如全文用一次 `综上所述` 可以接受，堆砌则报错。长文与短文的口径不同：长文容忍少量修饰性破折号，短文（推文、邮件、摘要）里的破折号应为 0 处。

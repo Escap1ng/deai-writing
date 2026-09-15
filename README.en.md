@@ -27,20 +27,20 @@ Run it against the fixture that ships with the repository. `examples/slop-sample
 ```console
 $ python3 code/check_phrasing.py --lang en examples/slop-sample-en.md
 examples/slop-sample-en.md:6:1 [en-slop-phrase] In today's world (occurrence #1, over the limit of 0)
-    → 删掉铺垫直接说结论；确需过渡时用携带信息的句子替代
+    → Delete the preamble and state the conclusion; if a transition is needed, make it carry information.
 examples/slop-sample-en.md:6:30 [en-slop-word] leverage (occurrence #1, over the limit of 0)
-    → 改为具体动词与事实（leverage→use、streamline→cut steps、cutting-edge→new）；仅在英文摘要/图注中检查
+    → Use a concrete verb or fact: leverage becomes use, streamline becomes cut steps, cutting-edge becomes new.
 ...
 examples/slop-sample-en.md:10:8 [en-slop-pattern] what nobody tells you (occurrence #4, over the limit of 0)
-    → 直接陈述结论、点名出处、给出事实；收尾停在最后一个具体结论上
+    → State the conclusion, name the source, give the fact; stop on the last concrete point.
 examples/slop-sample-en.md:18:101 [en-slop-pattern] to sum up (occurrence #11, over the limit of 0)
-    → 直接陈述结论、点名出处、给出事实；收尾停在最后一个具体结论上
+    → State the conclusion, name the source, give the fact; stop on the last concrete point.
 Checked 1 file(s); 29 hit(s) (word list: 21 rules)
 ```
 
 It exits 1. Rewrite each hit along the fix printed after `→`, then re-check until both checkers exit 0.
 
-The tool is Chinese-first, since `docs/deai-rules.md` is the authoritative specification. `--lang en` switches the message wrapper; rule labels and fix hints stay in Chinese.
+Messages print in Chinese by default. `--lang en` switches the messages, the rule labels and the fix hints to English; `docs/deai-rules.md` stays the authoritative specification and is written in Chinese.
 
 ## Quick start
 
@@ -62,6 +62,7 @@ python3 code/check_style.py draft.md                   # structure: exits 1 on a
 python3 code/strip_invisible.py --clean draft.tex      # characters: clean in place, keep a .bak
 python3 code/check_phrasing.py --list-rules            # show the rules and their fixes
 python3 code/check_style.py --list-metrics             # show the metrics and thresholds
+python3 code/check_phrasing.py draft.md --lang en      # English messages, rule labels and fixes
 ```
 
 A rule carrying `max_per_document` is a frequency cap, and only uses above the cap count as hits. Do not ship while the structural risk level reads `high` or `very high`. The final PDF and Word file must both be cleaned and re-checked; a `CLEANED-RESIDUAL` report means do not ship.
@@ -118,7 +119,7 @@ The English slop pattern catalogue and its sentence-level taxonomy come from [pe
 Checklist for adding a rule or a cleaning rule set:
 
 ```
-code/phrasing-blacklist.json    # add one entry under rules (id/label/severity/why/fix/patterns/max_per_document)
+code/phrasing-blacklist.json    # add one entry under rules (id/label/severity/why/fix/patterns/max_per_document, plus label_en/why_en/fix_en)
 docs/deai-rules.md              # document it in one line (counter-examples stay in backticks so the doc self-checks)
 examples/                       # add a positive or negative fixture when needed
 python3 code/selfcheck.py       # run the regression and confirm every assertion still passes
