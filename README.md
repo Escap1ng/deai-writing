@@ -4,15 +4,51 @@
 
 给中文或英文文稿过三道可执行门禁：去掉 AI 味，也去掉看不见的隐写字符。规则能跑、能复检、能回归，不靠通读时的感觉。
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![gates](https://img.shields.io/badge/gates-3-brightgreen.svg)
+![rules](https://img.shields.io/badge/rules-21-orange.svg)
+![self-check](https://img.shields.io/badge/self--check-12%20assertions-success.svg)
+![python](https://img.shields.io/badge/tested%20on-3.13%20%7C%203.14-informational.svg)
 
 ## 它做什么
 
-- **词表级**：`code/check_phrasing.py` 按 `code/phrasing-blacklist.json` 扫模板腔、套话、空泛、伪洞察等用词与句式，命中即退出 1，每条命中都附改法。21 条规则中英同源，`en-slop-*` 面向英文稿件。
-- **结构级**：`code/check_style.py` 检查过长被动句、句式重复、过渡词密度、长短句比例、相邻段落节奏、结果小数位六项指标，并给出 `低` / `中` / `高` / `极高` 风险等级。
-- **字符级**：`code/strip_invisible.py` 清除零宽字符、bidi 控制、tag 字符、变体选择符等不可见 Unicode，覆盖 `.tex` / `.docx` / `.pdf` 与纯文本。
+| 关 | 工具 | 检查什么 | 门禁 |
+|---|---|---|---|
+| **词表级** | `code/check_phrasing.py`<br>词表 `code/phrasing-blacklist.json` | 模板腔、套话、空泛、伪洞察等用词与句式，21 条中英规则 | 命中即退出 1，每条命中都附改法 |
+| **结构级** | `code/check_style.py` | 过长被动句、句式重复、过渡词密度、长短句比例、相邻段落节奏、结果小数位 | 命中即退出 1；风险「高/极高」不得交付 |
+| **字符级** | `code/strip_invisible.py` | 零宽字符、bidi 控制、tag 字符、变体选择符等不可见 Unicode | 交付产物清理后复检必须退出 0 |
 
 **边界**：只处理表述与字符，不改动事实、数据与结论。去 AI 味不等于口语化，判据是「只有这位作者写得出」，来自作者本人的具体判断、具体数值与具体边界。
+
+## 实测输出
+
+用仓库自带的反例跑一遍。`examples/slop-sample.md` 是刻意写坏的中文样本：
+
+```console
+$ python3 code/check_phrasing.py examples/slop-sample.md
+examples/slop-sample.md:5:1 [template-opener] 随着人工智能技术的快速发展（第 1 次出现，超过上限 0）
+    → 以本题的具体矛盾、关键数字或经核实的文献切入，直入主题
+examples/slop-sample.md:8:1 [formatting-slop] ## 模型效果 😀🚀✨（第 1 次出现，超过上限 0）
+    → 删掉 emoji 与表情符号，标题用文字表达层级；强调靠事实与数据，不靠符号
+examples/slop-sample.md:11:1 [fake-authority] 研究表明（第 1 次出现，超过上限 0）
+    → 补上可核实的文献出处；找不到出处就删掉该论据（宁缺毋假）
+examples/slop-sample.md:16:1 [colon-reveal] 最关键的一点：（第 1 次出现，超过上限 0）
+    → 把结论前置，直接在主句里说出来
+检查 1 个文件，命中 28 处（词表：21 条规则）
+```
+
+```console
+$ python3 code/check_style.py examples/style-slop-sample.md
+examples/style-slop-sample.md:5 [sentence-rhythm] 长句占比 59%（目标约 33%）
+    → 拆分过长句、合并过短句，使长句占比落在 20%-50%
+examples/style-slop-sample.md:7 [long-passive] 受限于样本规模，模型参数被反复调整而未能收敛到全局最优，该现象在数据稀疏时段尤为明显。
+    → 拆成 2-3 个短句，主动语态优先
+examples/style-slop-sample.md:11 [paragraph-rhythm] 相邻段落字数差异 2%（下限 20%）
+    → 按内容需要拉开段落长短，重点段落展开、次要内容从简
+检查 1 个文件，结构级命中 8 处；AI 痕迹风险：极高
+```
+
+两次都退出 1。命中处按输出里 `→` 之后的改法提示改写，改完复检，两个检查器都退出 0 才算过。
 
 ## 快速开始
 
@@ -24,7 +60,7 @@
 <project>/.trae/skills/deai-writing/
 ```
 
-脚本只用 Python 标准库，PDF 模式额外需要 PyMuPDF（`pip install pymupdf`），不依赖宿主框架。
+脚本只用 Python 标准库，PDF 模式额外需要 PyMuPDF（`pip install pymupdf`），不依赖宿主框架。已在 Python 3.13 与 3.14 上跑通全部自检。
 
 ### 跑三道关
 
@@ -36,7 +72,7 @@ python3 code/check_phrasing.py --list-rules            # 查看词表规则与�
 python3 code/check_style.py --list-metrics             # 查看结构指标与阈值
 ```
 
-命中处按输出里 `→` 之后的改法提示改写：补具体数值、补可核实出处、拆长句、拉开相邻段落字数差。改完复检，两个检查器都要退出 0；结构级风险等级为「高」或「极高」时不得交付。带 `max_per_document` 的是频次上限，超出上限的部分才算命中。最终 PDF 与 Word 必须清理后复检，复检仍报 `CLEANED-RESIDUAL` 不得交付。
+带 `max_per_document` 的是频次上限，超出上限的部分才算命中。结构级风险等级为「高」或「极高」时不得交付。最终 PDF 与 Word 必须清理后复检，复检仍报 `CLEANED-RESIDUAL` 不得交付。
 
 ### 回归自检
 
@@ -115,9 +151,8 @@ python3 code/selfcheck.py       # 跑回归，确认全部断言仍通过
 
 **guillaumemeyer/watermarks-remover**（MIT）
 
-取用不可见字符集与 IVD 保护逻辑，落在 `code/strip_invisible.py`，移植自上游 Layer A 的 `service/scripts/text_unicode.py`。
+取用不可见字符集与 IVD 保护逻辑，落在 `code/strip_invisible.py`，移植自上游 Layer A 的 `service/scripts/text_unicode.py`。该文件头部附有上游版权声明与 MIT 许可全文。
 
 本仓库在上游之上的增量是中文词表规则、结构级与字符级两道门禁，以及把正反例固化成断言的 `code/selfcheck.py`。
 
 **许可**：本仓库以 [MIT](LICENSE) 发布。再分发时请一并保留上游声明：上游 MIT 全文在 `docs/no-ai-slop-reference.md` 内，字符集相关的上游版权与许可全文在 `code/strip_invisible.py` 头部。
-

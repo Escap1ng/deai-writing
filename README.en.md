@@ -4,15 +4,43 @@
 
 Three runnable gates for any Chinese or English draft: remove the AI-slop habits, and remove the invisible watermark characters. The rules run, re-check and regress on their own, so you do not have to rely on how a draft feels.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![gates](https://img.shields.io/badge/gates-3-brightgreen.svg)
+![rules](https://img.shields.io/badge/rules-21-orange.svg)
+![self-check](https://img.shields.io/badge/self--check-12%20assertions-success.svg)
+![python](https://img.shields.io/badge/tested%20on-3.13%20%7C%203.14-informational.svg)
 
 ## What it does
 
-- **Word list.** `code/check_phrasing.py` reads `code/phrasing-blacklist.json` and scans for template openers, filler, empty claims and fake-insight phrasing, in Chinese and English alike. It exits 1 on any hit and prints the fix for each one. There are 21 rules, and the `en-slop-*` ones cover English drafts.
-- **Structure.** `code/check_style.py` measures six things: over-long passive sentences, repeated sentence openings, transition-word density, the long-to-short sentence ratio, paragraph length rhythm, and decimal places in results. It reports a risk level of `low` / `medium` / `high` / `very high`.
-- **Characters.** `code/strip_invisible.py` strips zero-width characters, bidi controls, tag characters and variation selectors, covering `.tex`, `.docx`, `.pdf` and plain text.
+| Gate | Tool | What it checks | When it fails |
+|---|---|---|---|
+| **Word list** | `code/check_phrasing.py`<br>rules in `code/phrasing-blacklist.json` | Template openers, filler, empty claims and fake-insight phrasing: 21 rules across Chinese and English | Exits 1 on any hit and prints the fix for each one |
+| **Structure** | `code/check_style.py` | Over-long passive sentences, repeated openings, transition density, long-to-short sentence ratio, paragraph rhythm, decimal places | Exits 1 on any hit; a risk level of `high` or `very high` blocks delivery |
+| **Characters** | `code/strip_invisible.py` | Zero-width characters, bidi controls, tag characters, variation selectors | Final artifacts must re-check at exit 0 after cleaning |
 
 **Scope.** It only touches wording and characters. Facts, data and conclusions stay as they are. De-slopping is not the same as making writing casual; the test is whether only this author could have written the sentence, drawn from that author's own judgements, numbers and limits.
+
+## What it looks like
+
+Run it against the fixture that ships with the repository. `examples/slop-sample-en.md` is a deliberately broken English sample:
+
+```console
+$ python3 code/check_phrasing.py --lang en examples/slop-sample-en.md
+examples/slop-sample-en.md:6:1 [en-slop-phrase] In today's world (occurrence #1, over the limit of 0)
+    → 删掉铺垫直接说结论；确需过渡时用携带信息的句子替代
+examples/slop-sample-en.md:6:30 [en-slop-word] leverage (occurrence #1, over the limit of 0)
+    → 改为具体动词与事实（leverage→use、streamline→cut steps、cutting-edge→new）；仅在英文摘要/图注中检查
+...
+examples/slop-sample-en.md:10:8 [en-slop-pattern] what nobody tells you (occurrence #4, over the limit of 0)
+    → 直接陈述结论、点名出处、给出事实；收尾停在最后一个具体结论上
+examples/slop-sample-en.md:18:101 [en-slop-pattern] to sum up (occurrence #11, over the limit of 0)
+    → 直接陈述结论、点名出处、给出事实；收尾停在最后一个具体结论上
+Checked 1 file(s); 29 hit(s) (word list: 21 rules)
+```
+
+It exits 1. Rewrite each hit along the fix printed after `→`, then re-check until both checkers exit 0.
+
+The tool is Chinese-first, since `docs/deai-rules.md` is the authoritative specification. `--lang en` switches the message wrapper; rule labels and fix hints stay in Chinese.
 
 ## Quick start
 
@@ -24,19 +52,19 @@ Drop this repository into your agent's skills directory:
 <project>/.trae/skills/deai-writing/
 ```
 
-The scripts use the Python standard library only. PDF mode additionally needs PyMuPDF (`pip install pymupdf`). No host framework required.
+The scripts use the Python standard library only, plus PyMuPDF for PDF mode (`pip install pymupdf`). No host framework required. The full self-check passes on Python 3.13 and 3.14.
 
 ### Run the three gates
 
 ```bash
-python3 code/check_phrasing.py draft.md                # word list: exit 1 on any hit
-python3 code/check_style.py draft.md                   # structure: exit 1 on any hit
+python3 code/check_phrasing.py draft.md                # word list: exits 1 on any hit
+python3 code/check_style.py draft.md                   # structure: exits 1 on any hit
 python3 code/strip_invisible.py --clean draft.tex      # characters: clean in place, keep a .bak
 python3 code/check_phrasing.py --list-rules            # show the rules and their fixes
 python3 code/check_style.py --list-metrics             # show the metrics and thresholds
 ```
 
-Rewrite each hit along the fix printed after `→`: add the number, name the source, split the long sentence, widen the gap between neighbouring paragraphs. Re-check until both checkers exit 0. Do not ship while the structural risk level reads `high` or `very high`. A rule carrying `max_per_document` is a frequency cap, and only uses above the cap count as hits. The final PDF and Word file must both be cleaned and re-checked; a `CLEANED-RESIDUAL` report means do not ship.
+A rule carrying `max_per_document` is a frequency cap, and only uses above the cap count as hits. Do not ship while the structural risk level reads `high` or `very high`. The final PDF and Word file must both be cleaned and re-checked; a `CLEANED-RESIDUAL` report means do not ship.
 
 ### Regression self-check
 
@@ -115,7 +143,7 @@ Taken: the English slop pattern taxonomy and the editing principles, covering bi
 
 **guillaumemeyer/watermarks-remover** (MIT)
 
-Taken: the invisible-character set and the IVD protection logic in `code/strip_invisible.py`, ported from Layer A (`service/scripts/text_unicode.py`).
+Taken: the invisible-character set and the IVD protection logic in `code/strip_invisible.py`, ported from Layer A (`service/scripts/text_unicode.py`). The upstream copyright and the full MIT license text sit in that file's header.
 
 What this repository adds on top: the Chinese word-list rules, the structural and character gates, and `code/selfcheck.py`, which pins the fixtures down as assertions.
 
