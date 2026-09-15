@@ -1,5 +1,7 @@
 # deai-writing
 
+[中文](README.md) | [English](README.en.md)
+
 给中文或英文文稿过三道可执行门禁：去掉 AI 味，也去掉看不见的隐写字符。规则能跑、能复检、能回归，不靠通读时的感觉。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -49,7 +51,8 @@ python3 code/selfcheck.py                              # 12 项断言：正反�
 ```
 deai-writing/
 ├── SKILL.md                       # 技能入口：定位、三道关、快速流程、强制项摘要、与其他技能的关系
-├── README.md                      # 本文件：快速开始、目录结构、分类依据与扩展约定
+├── README.md                      # 本文件（中文）：快速开始、目录结构、分类依据与扩展约定
+├── README.en.md                   # 英文版 README：与 README.md 同构
 ├── code/                          # 可执行脚本与数据
 │   ├── check_phrasing.py          #   词表级检查器：扫模板腔、套话、空泛、伪洞察，命中退出 1
 │   ├── phrasing-blacklist.json    #   中英词表与句式规则（单一事实源，加词只改它）
@@ -70,7 +73,11 @@ deai-writing/
 
 ## 与上游的关系
 
-英文 slop 模式清单与句式分类参考 [petergyang/no-ai-slop](https://github.com/petergyang/no-ai-slop)。本仓库在它之上做了三件事：把清单整理成 21 条可执行的中英词表；补上中文规则以及结构级、字符级两道门禁；用 `examples/` 与 `selfcheck.py` 把原来靠人眼对照的「期望结果」变成可回归的断言。
+英文 slop 模式清单与句式分类参考 [petergyang/no-ai-slop](https://github.com/petergyang/no-ai-slop)。本仓库在它之上做了三件事：
+
+- 把清单整理成 21 条可执行的中英词表，加词只改 `code/phrasing-blacklist.json` 一处。
+- 补上中文规则，以及结构级与字符级两道门禁，让「AI 味」从主观印象变成可复现的退出码。
+- 把正反例固化成 `code/selfcheck.py` 的断言，原来靠人眼对照的「期望结果」现在写错就会失败。
 
 ## 分类依据
 
@@ -98,8 +105,19 @@ python3 code/selfcheck.py       # 跑回归，确认全部断言仍通过
 - 脚本一律提供 `argparse` 入口，退出码统一为 `0` 成功 / `1` 校验失败 / `2` 用法或环境错误。
 - 新增或修改示例后必须跑 `python3 code/selfcheck.py`。
 
-## 来源与许可
+## 致谢与许可
 
-- 字符集与保护逻辑（Layer A）：[guillaumemeyer/watermarks-remover](https://github.com/guillaumemeyer/watermarks-remover)
-- 英文 slop 模式分类：[petergyang/no-ai-slop](https://github.com/petergyang/no-ai-slop)，上游文本整理为 [`docs/no-ai-slop-reference.md`](docs/no-ai-slop-reference.md)，MIT 声明、来源 URL 与 commit `000650b156983f5159695b441477f4e63b25dc85` 随文保留
-- 本仓库许可：[MIT](LICENSE)
+这个技能的规则体系建立在两个上游项目之上，各自取用的部分如下。
+
+**petergyang/no-ai-slop**（MIT，作者 Peter Yang）
+
+取用英文 slop 模式分类与编辑原则，包括二元对照、冒号揭晓、伪洞察铺陈、虚假深刻收尾、装饰性排版等类别。整理稿见 [`docs/no-ai-slop-reference.md`](docs/no-ai-slop-reference.md)，该文件保留上游 URL、commit `000650b156983f5159695b441477f4e63b25dc85` 与 MIT 声明全文。
+
+**guillaumemeyer/watermarks-remover**（MIT）
+
+取用不可见字符集与 IVD 保护逻辑，落在 `code/strip_invisible.py`，移植自上游 Layer A 的 `service/scripts/text_unicode.py`。
+
+本仓库在上游之上的增量是中文词表规则、结构级与字符级两道门禁，以及把正反例固化成断言的 `code/selfcheck.py`。
+
+**许可**：本仓库以 [MIT](LICENSE) 发布。再分发时请一并保留上游声明：上游 MIT 全文在 `docs/no-ai-slop-reference.md` 内，字符集来源标注在 `code/strip_invisible.py` 头部。
+
