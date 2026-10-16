@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "mode": "light",
+  "color": {
+    "window_bg": "#FFFFFF",
+    "panel_bg": "#FFFFFF",
+    "editor_bg": "#FFFFFF",
+    "text": "#141416",
+    "text_secondary": "#6C6C72",
+    "text_muted": "#8A8A90",
+    "divider": "#E6E6E8",
+    "divider_strong": "#D4D4D8",
+    "surface_hover": "#F6F7F8",
+    "surface_selected": "#EEF1F5",
+    "ink_bg": "#141416",
+    "ink_fg": "#FFFFFF",
+    "focus_ring": "#141416",
+    "gate_pass": "#17744A",
+    "gate_warn": "#B25C00",
+    "gate_block": "#C0392B"
+  },
+  "contrast": [
+    {"fg": "text", "bg": "editor_bg", "min": 4.5},
+    {"fg": "text_secondary", "bg": "editor_bg", "min": 4.5},
+    {"fg": "text_muted", "bg": "editor_bg", "min": 3.0},
+    {"fg": "ink_fg", "bg": "ink_bg", "min": 4.5},
+    {"fg": "gate_pass", "bg": "panel_bg", "min": 4.5},
+    {"fg": "gate_warn", "bg": "panel_bg", "min": 4.5},
+    {"fg": "gate_block", "bg": "panel_bg", "min": 4.5}
+  ],
+  "font": {
+    "unit": "pt",
+    "family_cjk": "Microsoft YaHei UI",
+    "family_latin": "Segoe UI",
+    "family_mono": "Consolas",
+    "size": {
+      "meta": 9,
+      "body": 11,
+      "emphasis": 12,
+      "title": 14
+    }
+  },
+  "window": {
+    "width": 1180,
+    "height": 760,
+    "min_width": 960,
+    "min_height": 620,
+    "corner_radius": 10,
+    "titlebar_height": 40,
+    "statusbar_height": 26,
+    "resize_grip": 6,
+    "content_padding": 18,
+    "column_divider_width": 1,
+    "tab_height": 36
+  }
+}

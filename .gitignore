@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 桌面应用构建产物（desktop/build/BUILD.md 里是从源码重建 exe 的步骤，不要提交 dist）
+desktop/build/
+desktop/dist/
+desktop/*.spec.bak
+
+# 本机配置与密钥：App 真实数据目录在 %APPDATA%\deai\，仓库内只允许 *.example.json
+*.local.json
+desktop/config/*.json
+!desktop/config/*.example.json
+
+# 编辑器与系统
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
