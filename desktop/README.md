@@ -5,7 +5,7 @@
 ## 分层契约
 
 ```
-ui/     无边框外壳、控件、Tab 布局      ← 只有这一层可以 import tkinter
+ui/     无边框外壳、控件、Tab 布局      ← 只有这一层可以 import PySide6
 core/   流水线、提示词拼装、供应商配置   ← 无界面依赖
 bridge/ 载入 code/ 引擎的唯一出口        ← 不落盘、不复制规则
 code/   三关检查器（仓库根，本目录之外）
@@ -39,4 +39,8 @@ PYTHONIOENCODING=utf-8 python3 -m unittest discover -s tests -t .
 cd .. && python3 code/selfcheck.py        # 引擎侧回归，须仍 12/12
 ```
 
-运行时只用标准库（tkinter、urllib、json）；打包工具不属于运行时依赖，不进这份清单。
+运行时依赖只有一个：PySide6-Essentials（界面）。接口调用、SSE 解析与三关引擎全部只用标准库。
+
+```bash
+python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple PySide6-Essentials
+```

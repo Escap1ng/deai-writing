@@ -1,5 +1,5 @@
-"""ui — 无边框外壳、控件与 Tab 布局。
+"""qt — 桌面应用的 Qt 外壳（PySide6）。
 
-只有本层可以 import tkinter；尺寸与颜色一律走 ui/theme.py 的 token。
-包本身不导入任何控件，保持 `import deai_app.ui` 在无界面环境下也能成功（测试与 --smoke 依赖这点）。
+色值、字号、尺寸一律从 assets/theme.json 取，QSS 由 style.stylesheet() 生成；
+本目录之外不许 import PySide6（tests/test_layering.py 拦）。
 """

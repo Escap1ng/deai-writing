@@ -1,0 +1,50 @@
+{
+  "_说明": "示例模板，不含密钥。把需要的条目复制到 %APPDATA%\\deai\\providers.json 并填 api_key；model 与 base_url 以供应商控制台显示的为准。",
+  "providers": [
+    {
+      "name": "DeepSeek",
+      "base_url": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat",
+      "api_key": "",
+      "temperature": 0.3,
+      "max_tokens": 4096,
+      "timeout": 120
+    },
+    {
+      "name": "Kimi",
+      "base_url": "https://api.moonshot.cn/v1",
+      "model": "moonshot-v1-32k",
+      "api_key": "",
+      "temperature": 0.3
+    },
+    {
+      "name": "豆包",
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "model": "doubao-pro-32k",
+      "api_key": "",
+      "temperature": 0.3
+    },
+    {
+      "name": "通义千问",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen-plus",
+      "api_key": "",
+      "temperature": 0.3
+    },
+    {
+      "name": "OpenAI",
+      "base_url": "https://api.openai.com/v1",
+      "model": "gpt-4o-mini",
+      "api_key": "",
+      "temperature": 0.3
+    },
+    {
+      "name": "本地 Ollama",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "model": "qwen2.5:14b",
+      "api_key": "",
+      "temperature": 0.3,
+      "timeout": 300
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 """theme — 读 assets/theme.json，提供色值/字号/尺寸的唯一取用口。
 
-本模块**不 import tkinter**：token 校验与对比度计算要能在无界面环境跑（CI、--smoke、
+本模块**不 import 任何界面工具包**：token 校验与对比度计算要能在无界面环境跑（CI、--checkup、
 打包自检都靠它）。控件里出现裸色值或裸字号就是越界，tests/test_theme_tokens.py 会拦。
 """
 from __future__ import annotations
@@ -59,6 +59,9 @@ class Theme:
 
     def win(self, name: str):
         return self._pick("window", name)
+
+    def shell(self, name: str):
+        return self._pick("shell", name)
 
     def family(self, kind: str = "cjk") -> str:
         return self._pick("font", f"family_{kind}")

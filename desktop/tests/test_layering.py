@@ -1,4 +1,4 @@
-"""依赖方向与越界检查：ui → core → bridge → code/，且只有 ui 能碰 tkinter。
+"""依赖方向与越界检查：ui → core → bridge → code/，且只有 ui 能碰界面工具包（tkinter / PySide6）。
 
 这套规则本身要能失败：test_synthetic_violation_is_caught 用一段假源码验证探测器会报，
 否则探测器可能是个永远绿的摆设。
@@ -22,8 +22,11 @@ FORBIDDEN_TARGETS = {
     "ui": set(),
 }
 
-#: 无界面可执行的文件，即使位于 ui/ 也不许 import tkinter
-TKINTER_FREE_FILES = {"ui/theme.py"}
+#: 界面工具包：只有 ui 层可以 import
+GUI_MODULES = ("tkinter", "PySide6")
+
+#: 无界面可执行的文件，即使位于 ui/ 也不许 import 界面工具包
+GUI_FREE_FILES = {"ui/theme.py"}
 
 #: 引擎模块只能由 bridge 用 importlib 按路径载入，不许出现在静态 import 里
 ENGINE_MODULES = {"check_phrasing", "check_style", "strip_invisible"}
@@ -70,17 +73,22 @@ def imports_of(source: str, filename: str) -> list[tuple[str, str]]:
     return found
 
 
+#: 组合根：把各层接起来的可执行入口，允许向下引用任何层（tkinter 与引擎的直接 import 照样拦）
+ENTRY_FILES = {"__main__.py"}
+
+
 def layering_violations(graph: dict[str, list[tuple[str, str]]]) -> list[str]:
     """graph: 文件相对路径 → imports_of() 结果。返回人可读的违例清单。"""
     problems: list[str] = []
     for filename, imports in graph.items():
         own = layer_of(filename)
+        skip_layer_rule = filename in ENTRY_FILES
         for target, spelled in imports:
-            if target in FORBIDDEN_TARGETS.get(own, set()):
+            if not skip_layer_rule and target in FORBIDDEN_TARGETS.get(own, set()):
                 problems.append(f"{filename}（{own} 层）依赖 {spelled}：{own} 不许引用 {target}")
-            if spelled.startswith("tkinter") or spelled == "tkinter":
-                if filename not in TKINTER_FREE_FILES and own != "ui":
-                    problems.append(f"{filename}（{own} 层）import tkinter：只有 ui 层可以")
+            toolkit = next((name for name in GUI_MODULES if spelled == name or spelled.startswith(name + ".")), None)
+            if toolkit and filename not in GUI_FREE_FILES and own != "ui":
+                problems.append(f"{filename}（{own} 层）import {toolkit}：只有 ui 层可以")
             if spelled in ENGINE_MODULES:
                 problems.append(f"{filename} 直接 import 引擎模块 {spelled}：应经 bridge 载入")
     return problems
@@ -99,9 +107,10 @@ class TestLayering(unittest.TestCase):
 
     def test_synthetic_violation_is_caught(self) -> None:
         """探测器必须能报出假源码里的越界，否则本测试是空的。"""
-        bad = "from deai_app.ui import theme\nimport tkinter\nimport check_style\n"
+        bad = ("from deai_app.ui import theme\nimport tkinter\n"
+               "from PySide6.QtWidgets import QWidget\nimport check_style\n")
         problems = layering_violations({"core/pipeline.py": imports_of(bad, "core/pipeline.py")})
-        self.assertEqual(len(problems), 3, problems)
+        self.assertEqual(len(problems), 4, problems)  # 层引用 + 两种工具包 + 引擎直引
 
     def test_ui_may_import_core_and_bridge(self) -> None:
         good = "from deai_app.core import jobs\nfrom deai_app.bridge import engines\nimport tkinter\n"
@@ -112,6 +121,13 @@ class TestLayering(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             for token in BRIDGE_FILESYSTEM_TOKENS:
                 self.assertNotIn(token, text, f"{rel_path(path)} 含落盘调用 {token}")
+
+    def test_entry_file_may_wire_layers_but_not_tkinter(self) -> None:
+        """组合根豁免只豁免"层引用"这一条，tkinter 与引擎 import 照样拦。"""
+        bad = "from deai_app.ui import app\nimport tkinter\n"
+        problems = layering_violations({"__main__.py": imports_of(bad, "__main__.py")})
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("tkinter", problems[0])
 
     def test_only_expected_packages_exist(self) -> None:
         dirs = {p.name for p in APP_DIR.iterdir() if p.is_dir() and not p.name.startswith("__")}
