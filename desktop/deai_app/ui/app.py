@@ -9,8 +9,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QFont, QKeySequence, QShortcut
+from PySide6.QtCore import Property, QPointF, QRectF, Qt
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -27,11 +27,13 @@ from PySide6.QtWidgets import (
 from deai_app import VERSION
 from deai_app.bridge import EngineError, engines
 from deai_app.core import checkup
-from deai_app.ui import report, style
+from deai_app.ui import motion, report, style
 from deai_app.ui.panes import Pane
+from deai_app.ui.segmented import SegmentedControl
 from deai_app.ui.theme import Theme, load_theme
 
 MODES = ("降 AI 味", "学术翻译")
+VIEW_MODES = ("逐条", "整段")
 HINTS = {
     0: "Ctrl+Enter 体检 · Ctrl+O 载入 · Ctrl+S 存报告",
     1: "学术翻译的模型调用在 M4 接入；三关体检对任何文本都可用",
@@ -39,11 +41,78 @@ HINTS = {
 INPUT_PLACEHOLDER = "把稿子贴在这里……（Ctrl+O 可载入 .md / .txt / .tex）"
 OUTPUT_PLACEHOLDER = "体检报告与改写结果出现在这里"
 READ_SUFFIXES = {".md", ".txt", ".tex", ".bib", ".typ"}
+CAPTION_KINDS = ("min", "max", "close")
 
-# 按码点定义，别手打：字形错了肉眼难查（tests/test_ui_contract.py 核对码点）
-MINIMIZE_GLYPH = chr(0x2014)   # —
-MAXIMIZE_GLYPH = chr(0x25A1)   # □
-CLOSE_GLYPH = chr(0x2715)      # ✕
+
+class CaptionButton(QToolButton):
+    """窗口三键：QPainter 画 10×10 的几何图形，不用文字字形。
+
+    文字字形（长横、方框、叉号）的字重、字宽与次像素边各不相同，缩到 28px 高时看起来像三种语言；
+    这里统一 1.25px 描边、圆角端点，关闭键悬停转红底白图标。
+    """
+
+    def __init__(self, theme: Theme, kind: str, on_click) -> None:
+        super().__init__()
+        self.theme = theme
+        self.kind = kind
+        self.setObjectName("close" if kind == "close" else "")
+        self.setFixedSize(40, 28)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setToolTip({"min": "最小化", "max": "最大化", "close": "关闭"}[kind])
+        self._hover = 0.0
+        self._hover_animation = None
+        self.clicked.connect(on_click)
+
+    def _get_hover(self) -> float:
+        return self._hover
+
+    def _set_hover(self, value: float) -> None:
+        self._hover = value
+        self.update()
+
+    hover = Property(float, _get_hover, _set_hover)
+
+    def _animate_hover(self, target: float) -> None:
+        if self._hover_animation is not None:
+            self._hover_animation.stop()
+        self._hover_animation = motion.animate_value(self, "hover", self._hover, target,
+                                                     motion.FAST_MS)
+
+    def enterEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        super().enterEvent(event)
+        self._animate_hover(1.0)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        super().leaveEvent(event)
+        self._animate_hover(0.0)
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        if self._hover > 0:
+            background = QColor(self.theme.color(
+                "gate_block" if self.kind == "close" else "surface_hover"))
+            background.setAlphaF(self._hover)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(background)
+            painter.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), 6, 6)
+        color = self.theme.color(
+            "ink_fg" if (self.kind == "close" and self._hover > 0.5) else "text")
+        pen = QPen(QColor(color))
+        pen.setWidthF(1.25)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        cx, cy, half = self.width() / 2, self.height() / 2, 5.0
+        if self.kind == "min":
+            painter.drawLine(QPointF(cx - half, cy), QPointF(cx + half, cy))
+        elif self.kind == "max":
+            painter.drawRoundedRect(QRectF(cx - half, cy - half, half * 2, half * 2), 1.5, 1.5)
+        else:
+            painter.drawLine(QPointF(cx - half, cy - half), QPointF(cx + half, cy + half))
+            painter.drawLine(QPointF(cx - half, cy + half), QPointF(cx + half, cy - half))
+        painter.end()
 
 
 def ensure_app(theme: Theme) -> QApplication:
@@ -59,32 +128,23 @@ class TitleBar(QWidget):
         self.setFixedHeight(int(theme.shell("titlebar_height")))
         self.setStyleSheet("background: transparent;")
         row = QHBoxLayout(self)
-        row.setContentsMargins(4, 0, 0, 0); row.setSpacing(4)
-        brand = QLabel("降 AI 工作台"); brand.setObjectName("brand"); row.addWidget(brand)
-        row.addSpacing(16)
-        self.tabs: list[QPushButton] = []
-        for index, name in enumerate(MODES):
-            button = QPushButton(name)
-            button.setObjectName("tabOn" if index == 0 else "tab")
-            button.setCursor(Qt.CursorShape.PointingHandCursor)
-            button.clicked.connect(lambda _=False, i=index: on_tab(i))
-            row.addWidget(button)
-            self.tabs.append(button)
+        # 左边距 = 栏内容边距 + 文档边距，品牌与两栏标题同一条左缘线
+        row.setContentsMargins(int(theme.shell("content_padding")) + int(theme.shell("document_margin")),
+                               0, 0, 0)
+        row.setSpacing(4)
+        self.brand_label = QLabel("降 AI 工作台")
+        self.brand_label.setObjectName("brand")
+        row.addWidget(self.brand_label)
+        row.addSpacing(24)
+        self.tabs = SegmentedControl(theme, MODES, on_tab)
+        self.tabs.setToolTip("切换模式（Ctrl+1 / Ctrl+2）")
+        row.addWidget(self.tabs)
         row.addStretch()
-        for glyph, name, handler in ((MINIMIZE_GLYPH, "", on_minimize),
-                                     (MAXIMIZE_GLYPH, "", on_maximize),
-                                     (CLOSE_GLYPH, "close", on_close)):
-            button = QToolButton(); button.setText(glyph)
-            if name:
-                button.setObjectName(name)
-            button.setFixedSize(40, 28)
-            button.clicked.connect(handler)
-            row.addWidget(button)
+        for kind, handler in (("min", on_minimize), ("max", on_maximize), ("close", on_close)):
+            row.addWidget(CaptionButton(theme, kind, handler))
 
     def select_tab(self, index: int) -> None:
-        for position, button in enumerate(self.tabs):
-            button.setObjectName("tabOn" if position == index else "tab")
-            style.unpolish_repolish(button)
+        self.tabs.select(index, notify=False)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         if event.button() == Qt.MouseButton.LeftButton and self.window().windowHandle():
@@ -124,8 +184,14 @@ class DeaiApp(QWidget):
 
         row = QHBoxLayout(); row.setSpacing(int(shell("pane_gap")))
         self.input = Pane("输入", self.theme, actions=[("清空", self._clear), ("载入", self._load)])
+        self.output_view = SegmentedControl(
+            self.theme, VIEW_MODES, self._switch_output_view,
+            compact=True, accessible_name="输出视图",
+        )
+        self.output_view.setToolTip("切换逐条报告与整段原文")
         self.output = Pane("输出", self.theme, readonly=True, band="metrics",
-                           actions=[("复制", self._copy), ("存为文件", self._save)])
+                           actions=[("复制", self._copy), ("存为文件", self._save)],
+                           header_extra=self.output_view)
         row.addWidget(self.input, 1); row.addWidget(self.output, 1)
         column.addLayout(row, 1)
 
@@ -147,6 +213,9 @@ class DeaiApp(QWidget):
         column.addWidget(band)
 
         self._mode = 0
+        self._output_view = 0
+        self._last_gate: checkup.GateReport | None = None
+        self._last_source = ""
         self.input.set_placeholder(INPUT_PLACEHOLDER)
         self.output.set_placeholder(OUTPUT_PLACEHOLDER)
         self.input.refresh_meta()
@@ -172,7 +241,9 @@ class DeaiApp(QWidget):
         except EngineError as exc:
             self._say(f"检查失败：{exc}")
             return
-        self.output.set_html(report.render_html(gate, text, self.theme))
+        self._last_gate = gate
+        self._last_source = text
+        self._render_output()
         state = (len(gate.phrasing), gate.style_risk, gate.invisible_total)
         self.input.set_gate(*state)
         verdict = "通过" if gate.clean else ("阻断" if gate.blocked else "待改")
@@ -191,6 +262,10 @@ class DeaiApp(QWidget):
             self.input.set_text(cleaned)
         gate = checkup.run(self.input.text(), "自动")
         self.input.set_gate(len(gate.phrasing), gate.style_risk, gate.invisible_total)
+        if self._last_gate is not None:
+            self._last_gate = gate
+            self._last_source = self.input.text()
+            self._render_output()
         self._say(f"已清除 {count} 个不可见字符" if count else "未发现不可见字符，正文未改动")
 
     def _copy(self) -> None:
@@ -243,6 +318,22 @@ class DeaiApp(QWidget):
         self.titlebar.select_tab(index)
         self._switch_mode(index)
 
+    def _render_output(self) -> None:
+        if self._last_gate is None:
+            return
+        renderer = (report.render_annotated_html if self._output_view == 1
+                    else report.render_html)
+        self.output.set_html(renderer(self._last_gate, self._last_source, self.theme))
+
+    def _switch_output_view(self, index: int) -> None:
+        self._output_view = index
+        if self._last_gate is None:
+            self._say("先跑一次体检，再切换输出视图")
+            return
+        self._render_output()
+        self._say("输出视图：逐条（规则与改法）" if index == 0
+                  else "输出视图：整段（底色标出词表命中）")
+
     def _say(self, text: str) -> None:
         self.status.setText(text)
 
@@ -275,5 +366,8 @@ class DeaiApp(QWidget):
 
     def launch(self) -> int:
         ensure_app(self.theme)
+        if motion.enabled():
+            self.setWindowOpacity(0.0)  # 先透明再 show，避免淡入前闪一帧实心窗口
         self.show()
+        motion.fade_in(self)
         return QApplication.exec()

@@ -5,7 +5,7 @@
 ## 分层契约
 
 ```
-ui/     无边框外壳、控件、Tab 布局      ← 只有这一层可以 import PySide6
+ui/     无边框外壳、分段控件、动效层      ← 只有这一层可以 import PySide6
 core/   流水线、提示词拼装、供应商配置   ← 无界面依赖
 bridge/ 载入 code/ 引擎的唯一出口        ← 不落盘、不复制规则
 code/   三关检查器（仓库根，本目录之外）
@@ -31,6 +31,14 @@ python3 code/check_style.py article.md --json
 
 `tests/test_bridge_parity.py` 会逐条比对两条路径的结果（含 `--lang en`、正例零命中、反例非零）。
 
+## 动效
+
+动效只用于状态变化与反馈，不装饰静止内容：
+
+- 分段控件的白色药丸滑动 180ms，窗口淡入 180ms，悬停反馈与滚轮补间 120ms，全部缓出。
+- 系统关闭「显示动画」时一律瞬时到位；`tests/test_motion.py` 同时验证 100–300ms 的时长边界、
+  缓动类型、滚轮落点与降级路径。
+
 ## 测试
 
 ```bash
@@ -38,6 +46,9 @@ cd desktop
 PYTHONIOENCODING=utf-8 python3 -m unittest discover -s tests -t .
 cd .. && python3 code/selfcheck.py        # 引擎侧回归，须仍 12/12
 ```
+
+项目文件不写 emoji 字面量；测试会扫描全树。`formatting-slop` 的覆盖改用码点构造的样本，
+不靠静态文件里的表情符号。
 
 运行时依赖只有一个：PySide6-Essentials（界面）。接口调用、SSE 解析与三关引擎全部只用标准库。
 

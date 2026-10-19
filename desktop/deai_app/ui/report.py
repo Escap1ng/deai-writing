@@ -58,6 +58,70 @@ def blocks(report: GateReport, source: str, limit: int = LIMIT) -> list[Block]:
     return out
 
 
+def _group_hits(report: GateReport) -> dict[int, list[dict]]:
+    grouped: dict[int, list[dict]] = {}
+    for hit in report.phrasing:
+        grouped.setdefault(int(hit["line"]), []).append(hit)
+    for hits in grouped.values():
+        hits.sort(key=lambda hit: (int(hit["col"]), -len(hit.get("text", ""))))
+    return grouped
+
+
+def _annotate_line(line: str, hits: list[dict], theme: Theme) -> str:
+    if not hits:
+        return html.escape(line)
+    mark = theme.color("mark_bg")
+    rule = theme.color("gate_warn")
+    parts: list[str] = []
+    cursor = 0
+    for hit in hits:
+        wanted = hit.get("text", "")
+        if not wanted:
+            continue
+        start = max(0, int(hit["col"]) - 1)
+        if line[start:start + len(wanted)] != wanted:
+            found = line.find(wanted, start)
+            if found < 0:
+                found = line.find(wanted)
+            if found < 0:
+                continue
+            start = found
+        end = start + len(wanted)
+        if start < cursor:
+            continue
+        tip = html.escape(f"{hit['label']}：{hit.get('fix', '')}", quote=True)
+        parts.append(html.escape(line[cursor:start]))
+        parts.append(
+            f'<span style="background-color:{mark};border-bottom:2px solid {rule};" '
+            f'title="{tip}">{html.escape(line[start:end])}</span>'
+        )
+        cursor = end
+    parts.append(html.escape(line[cursor:]))
+    return "".join(parts)
+
+
+def render_annotated_html(report: GateReport, source: str,
+                          theme: Theme | None = None) -> str:
+    """整段视图：原文按段落排版，词表命中就地着色，不改动一个可见字符。"""
+    theme = theme or load_theme()
+    grouped = _group_hits(report)
+    paragraphs: list[str] = []
+    block: list[str] = []
+    for lineno, line in enumerate(source.splitlines(), 1):
+        if line.strip():
+            block.append(_annotate_line(line, grouped.get(lineno, []), theme))
+        elif block:
+            paragraphs.append("<br>".join(block))
+            block = []
+    if block:
+        paragraphs.append("<br>".join(block))
+    body = "".join(f'<p style="margin:0 0 10px 0;">{text}</p>' for text in paragraphs)
+    return (
+        f"<div style=\"font-family:'Microsoft YaHei UI';font-size:{theme.size('body')}pt;"
+        f"color:{theme.color('text')};line-height:150%;\">{body}</div>"
+    )
+
+
 def render_html(report: GateReport, source: str, theme: Theme | None = None,
                 limit: int = LIMIT) -> str:
     theme = theme or load_theme()

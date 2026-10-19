@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import html
 import json
 import re
 import subprocess
@@ -14,13 +15,17 @@ from pathlib import Path
 
 import deai_app
 from deai_app.core import checkup
-from deai_app.ui import app as ui_app
+from deai_app.ui import report as report_mod
 from deai_app.ui.theme import load_theme
 
 APP_DIR = Path(deai_app.__file__).resolve().parent
 DESKTOP_ROOT = APP_DIR.parent
 REPO_ROOT = DESKTOP_ROOT.parent
 COLOR_REF = re.compile(r'\.(?:color|win|size)\("([A-Za-z_][A-Za-z0-9_]*)"|font_for\([\w.]+, "([A-Za-z_][A-Za-z0-9_]*)')
+EMOJI_RANGES = ((0x1F000, 0x1FAFF), (0x2600, 0x27BF), (0x2B00, 0x2BFF), (0xFE0F, 0xFE0F))
+TEXT_SUFFIXES = {".md", ".py", ".json", ".txt", ".tex", ".bib", ".typ", ".yml", ".yaml",
+                 ".toml", ".cfg", ".ini", ".html", ".css", ".js", ".ts", ".xml"}
+SKIP_PARTS = {".git", "__pycache__", "build", "dist", ".venv", "node_modules"}
 
 
 def read(path: Path) -> str:
@@ -48,13 +53,28 @@ class TestThemeTokenReferences(unittest.TestCase):
         self.assertTrue(COLOR_REF.search('f = font_for(theme, "bodiy")'))
 
 
-class TestGlyphs(unittest.TestCase):
-    def test_codepoints_are_as_documented(self) -> None:
-        self.assertEqual(ord(ui_app.MINIMIZE_GLYPH), 0x2014)
-        self.assertEqual(ord(ui_app.MAXIMIZE_GLYPH), 0x25A1)
-        self.assertEqual(ord(ui_app.CLOSE_GLYPH), 0x2715)
-        glyphs = {ui_app.MINIMIZE_GLYPH, ui_app.MAXIMIZE_GLYPH, ui_app.CLOSE_GLYPH}
-        self.assertEqual(len(glyphs), 3, "三个键位不能共用一个字形")
+class TestNoEmoji(unittest.TestCase):
+    """全项目不许出现 emoji 字面量；规则本身仍用码点构造的样本验证。"""
+
+    def test_no_literal_emoji_anywhere(self) -> None:
+        offenders = []
+        for path in REPO_ROOT.rglob("*"):
+            if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
+                continue
+            relative = path.relative_to(REPO_ROOT)
+            if any(part in SKIP_PARTS for part in relative.parts):
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+            for lineno, line in enumerate(text.splitlines(), 1):
+                for ch in line:
+                    codepoint = ord(ch)
+                    if any(low <= codepoint <= high for low, high in EMOJI_RANGES):
+                        offenders.append(f"{relative.as_posix()}:{lineno} U+{codepoint:04X}")
+                        break
+        self.assertEqual(offenders, [], f"项目里出现了 emoji 字面量：{offenders}")
 
 
 class TestCheckup(unittest.TestCase):
@@ -119,6 +139,22 @@ class TestCheckup(unittest.TestCase):
         report = checkup.run("")
         self.assertTrue(report.clean)
         self.assertEqual(report.lang, "zh")
+
+    def test_annotated_view_keeps_every_character_and_marks_hits(self) -> None:
+        theme = load_theme()
+        report = checkup.run(self.slop)
+        markup = report_mod.render_annotated_html(report, self.slop, theme)
+        self.assertIn(theme.color("mark_bg"), markup)
+        first = report.phrasing[0]["text"]
+        self.assertIn(f">{html.escape(first)}</span>", markup)
+        plain = html.unescape(re.sub(r"<[^>]+>", "", markup))
+        self.assertEqual(re.sub(r"\s+", "", plain), re.sub(r"\s+", "", self.slop))
+
+    def test_formatting_slop_rule_still_catches_emoji(self) -> None:
+        """样本文件不再放 emoji 字面量；规则本身用码点构造的文本验证。"""
+        text = "## 模型效果 " + "".join(chr(cp) for cp in (0x1F600, 0x1F680, 0x2728))
+        rules = [hit["rule"] for hit in checkup.run(text).phrasing]
+        self.assertIn("formatting-slop", rules)
 
 
 class TestCheckupCli(unittest.TestCase):

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import unittest
 
@@ -15,11 +16,14 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from pathlib import Path  # noqa: E402
 
 import deai_app  # noqa: E402
-from PySide6.QtCore import QPoint  # noqa: E402
-from PySide6.QtGui import QTextCursor  # noqa: E402
+from PySide6.QtCore import QPoint, QPointF, Qt  # noqa: E402
+from PySide6.QtGui import QTextCursor, QWheelEvent  # noqa: E402
+from PySide6.QtTest import QTest  # noqa: E402
 
 from deai_app.core import checkup  # noqa: E402
 from deai_app.ui import app as qt_app  # noqa: E402
+from deai_app.ui import motion  # noqa: E402
+from deai_app.ui.segmented import INSET  # noqa: E402
 from deai_app.ui.theme import load_theme  # noqa: E402
 
 REPO_ROOT = Path(deai_app.__file__).resolve().parents[2]
@@ -56,6 +60,11 @@ class TestQtShell(unittest.TestCase):
         self.win.input.set_text("")
         self.win.output.set_text("")
         self.win.input.set_gate(None, None, None)
+        self.win._select_tab(0)
+        self.win._last_gate = None
+        self.win._last_source = ""
+        self.win.output_view.select(0, notify=False)
+        self.win._output_view = 0
         self.qapp.processEvents()
 
     def test_title_and_body_share_left_edge(self) -> None:
@@ -64,11 +73,13 @@ class TestQtShell(unittest.TestCase):
                 self.assertEqual(first_char_x(self.win, pane),
                                  pane.title_label.mapTo(self.win, QPoint(0, 0)).x())
 
-    def test_titlebar_fits_tabs(self) -> None:
-        for tab in self.win.titlebar.tabs:
-            self.assertLessEqual(tab.sizeHint().height(), self.win.titlebar.height())
-            self.assertLessEqual(top_y(tab, self.win) + tab.height(),
-                                 top_y(self.win.titlebar, self.win) + self.win.titlebar.height())
+    def test_titlebar_fits_mode_switch(self) -> None:
+        tabs = self.win.titlebar.tabs
+        self.assertLessEqual(tabs.height(), self.win.titlebar.height())
+        self.assertLessEqual(top_y(tabs, self.win) + tabs.height(),
+                             top_y(self.win.titlebar, self.win) + self.win.titlebar.height())
+        self.assertGreaterEqual(tabs.height(), 24, "分段控件低于最小点击目标 24px")
+        self.assertGreaterEqual(tabs.width(), 220)
 
     def test_band_does_not_overlap_editor(self) -> None:
         for pane in (self.win.input, self.win.output):
@@ -106,13 +117,62 @@ class TestQtShell(unittest.TestCase):
         self.win.input.set_text("正文")
         self.assertEqual(self.win.input.text(), "正文")
 
-    def test_tab_switch_updates_hint_and_underline(self) -> None:
+    def test_mode_switch_updates_hint_and_pill(self) -> None:
+        tabs = self.win.titlebar.tabs
         self.win._select_tab(1)
+        self.assertEqual(tabs.index, 1)
         self.assertEqual(self.win.hint.text(), qt_app.HINTS[1])
-        self.assertEqual(self.win.titlebar.tabs[1].objectName(), "tabOn")
-        self.assertEqual(self.win.titlebar.tabs[0].objectName(), "tab")
+        QTest.qWait(260)
+        target = INSET + (tabs.width() - 2 * INSET) * 0.5
+        self.assertAlmostEqual(tabs.pill, target, delta=1.0)
         self.win._select_tab(0)
-        self.assertEqual(self.win.titlebar.tabs[0].objectName(), "tabOn")
+        self.assertEqual(tabs.index, 0)
+        self.assertEqual(self.win.hint.text(), qt_app.HINTS[0])
+
+    def test_mode_switch_responds_to_click_and_arrow_keys(self) -> None:
+        tabs = self.win.titlebar.tabs
+        x = int(INSET + (tabs.width() - 2 * INSET) * 0.75)
+        QTest.mouseClick(tabs, Qt.MouseButton.LeftButton, pos=QPoint(x, tabs.height() // 2))
+        self.assertEqual(tabs.index, 1)
+        self.assertEqual(self.win.hint.text(), qt_app.HINTS[1])
+        tabs.setFocus()
+        QTest.keyClick(tabs, Qt.Key.Key_Left)
+        self.assertEqual(tabs.index, 0)
+        self.assertEqual(self.win.hint.text(), qt_app.HINTS[0])
+
+    def test_output_view_switches_between_rows_and_whole_text(self) -> None:
+        self.win.input.set_text(SLOP)
+        self.win.run_check()
+        self.assertEqual(self.win.output_view.index, 0)
+        self.assertIn("词表级", self.win.output.text())
+        self.win.output_view.select(1)
+        self.assertEqual(self.win.output_view.index, 1)
+        self.assertNotIn("词表级", self.win.output.text())
+        self.assertIn("随着人工智能技术的快速发展", self.win.output.text())
+        self.assertIn(self.theme.color("mark_bg").lower(),
+                      self.win.output.edit.toHtml().lower())
+        self.win.output_view.select(0)
+        self.assertIn("词表级", self.win.output.text())
+
+    def test_whole_text_view_keeps_every_character(self) -> None:
+        self.win.input.set_text(SLOP)
+        self.win.run_check()
+        self.win.output_view.select(1)
+        self.qapp.processEvents()
+        plain = re.sub(r"\s+", "", self.win.output.text())
+        self.assertEqual(plain, re.sub(r"\s+", "", SLOP))
+
+    def test_output_view_is_compact_and_fits_header(self) -> None:
+        view = self.win.output_view
+        header = self.win.output.title_label.parentWidget()
+        self.assertGreaterEqual(view.height(), 24, "低于最小点击目标 24px")
+        self.assertLessEqual(view.height(), header.height())
+
+    def test_output_view_switch_before_check_says_so(self) -> None:
+        self.win._last_gate = None
+        self.win.output_view.select(1)
+        self.assertIn("先跑一次体检", self.win.status.text())
+        self.win.output_view.select(0)
 
     def test_strip_invisible_removes_and_reports(self) -> None:
         self.win.input.set_text("方法\u200b有效")
@@ -152,13 +212,52 @@ class TestQtShell(unittest.TestCase):
                            capture_output=True, text=True, encoding="utf-8", timeout=6)
         self.assertNotIn("QApplication", str(caught.exception))
 
+    def test_caption_buttons_are_painted_not_glyphs(self) -> None:
+        """三键必须是画出来的几何图形：文字字形的字重和字宽对不齐。"""
+        buttons = self.win.titlebar.findChildren(qt_app.CaptionButton)
+        self.assertEqual([b.kind for b in buttons], list(qt_app.CAPTION_KINDS))
+        for button in buttons:
+            self.assertEqual(button.text(), "", "窗口键不该再用文字字形")
+            image = button.grab().toImage()
+            background = image.pixel(1, 1)
+            drawn = sum(1 for y in range(image.height()) for x in range(image.width())
+                        if image.pixel(x, y) != background)
+            self.assertGreater(drawn, 10, f"{button.kind} 键没有画出图形")
+
+    def test_brand_aligns_with_pane_titles(self) -> None:
+        brand_x = self.win.titlebar.brand_label.mapTo(self.win, QPoint(0, 0)).x()
+        title_x = self.win.input.title_label.mapTo(self.win, QPoint(0, 0)).x()
+        self.assertLessEqual(abs(brand_x - title_x), 2, f"品牌 {brand_x} vs 左栏标题 {title_x}")
+
+    def test_loaded_sample_sits_at_top(self) -> None:
+        self.win._read_into(self.win.input, REPO_ROOT / "examples" / "slop-sample.md")
+        self.qapp.processEvents()
+        self.assertEqual(self.win.input.edit.textCursor().position(), 0)
+        self.assertEqual(self.win.input.edit.verticalScrollBar().value(), 0)
+
     def test_window_respects_minimum_size(self) -> None:
         self.assertEqual(self.win.minimumWidth(), int(self.theme.shell("min_width")))
         self.assertEqual(self.win.minimumHeight(), int(self.theme.shell("min_height")))
 
+    def test_wheel_scrolls_smoothly_to_target(self) -> None:
+        self.win.input.set_text(SLOP * 10)
+        self.qapp.processEvents()
+        bar = self.win.input.edit.verticalScrollBar()
+        bar.setValue(0)
+        event = QWheelEvent(QPointF(20, 20), QPointF(20, 20), QPoint(0, 0), QPoint(0, -120),
+                            Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+                            Qt.ScrollPhase.NoScrollPhase, False)
+        self.qapp.sendEvent(self.win.input.edit.viewport(), event)
+        expected = min(motion.WHEEL_STEP_PX, bar.maximum())
+        if motion.enabled():
+            self.assertLess(bar.value(), expected, "滚轮不该一帧跳到位")
+            QTest.qWait(motion.FAST_MS + 100)
+        self.assertEqual(bar.value(), expected)
+
     def test_stylesheet_is_applied_from_theme(self) -> None:
         self.assertIn(self.theme.color("canvas_bg"), self.qapp.styleSheet())
         self.assertIn(f'{self.theme.shell("card_radius")}px', self.qapp.styleSheet())
+        self.assertIn(self.theme.color("selection_bg"), self.qapp.styleSheet())
 
 
 if __name__ == "__main__":

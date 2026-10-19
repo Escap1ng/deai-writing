@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QTextBlockFormat, QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
@@ -20,7 +20,8 @@ from PySide6.QtWidgets import (
 )
 
 from deai_app.core import checkup
-from deai_app.ui.theme import Theme, load_theme
+from deai_app.ui import motion
+from deai_app.ui.theme import Theme
 
 GATE_LABELS = ("词表", "结构", "字符")
 RISK_COLOR = {"低": "gate_pass", "中": "gate_warn", "高": "gate_block", "极高": "gate_block"}
@@ -28,7 +29,8 @@ RISK_COLOR = {"低": "gate_pass", "中": "gate_warn", "高": "gate_block", "极�
 
 class Pane(QFrame):
     def __init__(self, title: str, theme: Theme, *, readonly: bool = False,
-                 actions: Sequence[tuple[str, Callable[[], None]]] = (), band: str = "chips") -> None:
+                 actions: Sequence[tuple[str, Callable[[], None]]] = (), band: str = "chips",
+                 header_extra: QWidget | None = None) -> None:
         super().__init__()
         self.theme = theme
         self.setObjectName("pane")
@@ -43,6 +45,9 @@ class Pane(QFrame):
         head.setContentsMargins(int(theme.shell("document_margin")), 0, 0, 0)
         label = QLabel(title); label.setObjectName("paneTitle"); self.title_label = label
         head.addWidget(self.title_label)
+        if header_extra is not None:
+            head.addSpacing(12)
+            head.addWidget(header_extra)
         head.addStretch()
         self.meta = QLabel(""); self.meta.setObjectName("meta"); head.addWidget(self.meta)
         for name, callback in actions:
@@ -59,8 +64,25 @@ class Pane(QFrame):
         self.edit.setReadOnly(readonly)
         self.edit.document().setDocumentMargin(int(theme.shell("document_margin")))
         self.edit.textChanged.connect(self.refresh_meta)
+        self._wheel_animation = None
+        self.edit.viewport().installEventFilter(self)
         outer.addWidget(self.edit, 1)
         outer.addWidget(self._build_band())
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 - Qt 命名
+        """滚轮改成 120ms 补间：默认的一格瞬移在长稿里很跳。"""
+        if watched is self.edit.viewport() and event.type() == QEvent.Type.Wheel:
+            bar = self.edit.verticalScrollBar()
+            delta = event.angleDelta().y() or event.pixelDelta().y()
+            if delta:
+                target = motion.wheel_target(bar.value(), delta, bar.maximum())
+                if target != bar.value():
+                    if self._wheel_animation is not None:
+                        self._wheel_animation.stop()
+                    self._wheel_animation = motion.animate_value(
+                        bar, "value", bar.value(), target, motion.FAST_MS)
+                return True
+        return super().eventFilter(watched, event)
 
     # ---------- 底部带 ----------
 
@@ -75,7 +97,9 @@ class Pane(QFrame):
         if self._band_mode == "chips":
             for name in GATE_LABELS:
                 dot, text = QLabel(), QLabel(f"{name} —")
-                dot.setObjectName("dot"); dot.setFixedSize(9, 9)
+                dot.setObjectName("dot"); dot.setFixedSize(8, 8)
+                # 未体检时也要画出来：给一个中性底色，否则三关片只剩文字、没有圆点
+                dot.setStyleSheet(f"background: {self.theme.color('divider_strong')}; border-radius: 4px;")
                 text.setObjectName("meta")
                 layout.addWidget(dot); layout.addWidget(text)
                 self.chips.append((dot, text))
@@ -84,6 +108,7 @@ class Pane(QFrame):
                 column = QVBoxLayout(); column.setSpacing(0)
                 number, label = QLabel("—"), QLabel(name)
                 number.setObjectName("metricNum"); label.setObjectName("metricLab")
+                number.setStyleSheet(f"color: {self.theme.color('text_muted')};")  # 未体检时别让三个长破折号变成黑杠
                 column.addWidget(number); column.addWidget(label)
                 layout.addLayout(column)
                 self.metrics.append((number, label))

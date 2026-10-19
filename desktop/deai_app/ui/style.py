@@ -1,21 +1,13 @@
 """style — 把 theme.json 的 token 翻成一份 QSS。
 
-界面代码里不出现色值与字号：控件只写 objectName，样式集中在这里。
+界面代码只引用 token 或 objectName，不出现裸色值与裸字号。
 滚动条也在这里重画：Qt 默认的凹陷 groove 是"老对话框感"的主要来源。
 """
 from __future__ import annotations
 
 from deai_app.ui.theme import Theme, load_theme
 
-__all__ = ["stylesheet", "unpolish_repolish"]
-
-
-def unpolish_repolish(widget) -> None:
-    """改 objectName 之后必须重抛光，否则 QSS 仍按旧名字生效。"""
-    style_object = widget.style()
-    style_object.unpolish(widget)
-    style_object.polish(widget)
-    widget.update()
+__all__ = ["stylesheet"]
 
 
 def stylesheet(theme: Theme | None = None) -> str:
@@ -38,21 +30,10 @@ QWidget {{
     border-radius: {s('card_radius')}px;
 }}
 #brand {{ font-size: {f('emphasis')}pt; font-weight: 700; color: {c('text')}; }}
-QPushButton#tab, QPushButton#tabOn {{
-    border: none; background: transparent; padding: 6px 14px;
-    font-size: {f('body')}pt; color: {c('text_muted')};
-}}
-QPushButton#tab:hover {{ color: {c('text_secondary')}; }}
-QPushButton#tabOn {{
-    font-weight: 700; color: {c('text')};
-    border-bottom: 2px solid {c('ink_bg')};
-}}
 QToolButton {{
     border: none; background: transparent; color: {c('text_secondary')};
     font-size: {f('body')}pt; border-radius: 6px;
 }}
-QToolButton:hover {{ background: {c('surface_hover')}; color: {c('text')}; }}
-QToolButton#close:hover {{ background: {c('gate_block')}; color: {c('ink_fg')}; }}
 #pane {{
     background: {c('card_bg')};
     border: 1px solid {c('divider')};
@@ -80,7 +61,7 @@ QPushButton#ghost:hover {{ background: {c('surface_selected')}; color: {c('text'
 QPlainTextEdit, QTextEdit {{
     background: {c('card_bg')}; border: none;
     font-size: {f('body')}pt; color: {c('text')};
-    selection-background-color: {c('surface_selected')};
+    selection-background-color: {c('selection_bg')};
     selection-color: {c('text')};
 }}
 QPlainTextEdit:read-only, QTextEdit:read-only {{ background: {c('card_bg')}; }}

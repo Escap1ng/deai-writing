@@ -44,7 +44,9 @@ class TestThemeValues(unittest.TestCase):
 
     def test_required_tokens_exist(self) -> None:
         for name in ("window_bg", "editor_bg", "text", "ink_bg", "ink_fg", "divider",
-                     "gate_pass", "gate_warn", "gate_block", "surface_hover", "surface_selected"):
+                     "gate_pass", "gate_warn", "gate_block", "surface_hover", "surface_selected",
+                     "selection_bg", "mark_bg", "segment_track", "segment_pill",
+                     "segment_border", "segment_text"):
             self.theme.color(name)
         for name in ("width", "height", "min_width", "min_height", "corner_radius",
                      "titlebar_height", "statusbar_height", "resize_grip", "content_padding"):

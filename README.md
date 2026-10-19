@@ -28,13 +28,11 @@
 $ python3 code/check_phrasing.py examples/slop-sample.md
 examples/slop-sample.md:5:1 [template-opener] 随着人工智能技术的快速发展（第 1 次出现，超过上限 0）
     → 以本题的具体矛盾、关键数字或经核实的文献切入，直入主题
-examples/slop-sample.md:8:1 [formatting-slop] ## 模型效果 😀🚀✨（第 1 次出现，超过上限 0）
-    → 删掉 emoji 与表情符号，标题用文字表达层级；强调靠事实与数据，不靠符号
 examples/slop-sample.md:11:1 [fake-authority] 研究表明（第 1 次出现，超过上限 0）
     → 补上可核实的文献出处；找不到出处就删掉该论据（宁缺毋假）
 examples/slop-sample.md:16:1 [colon-reveal] 最关键的一点：（第 1 次出现，超过上限 0）
     → 把结论前置，直接在主句里说出来
-检查 1 个文件，命中 28 处（词表：21 条规则）
+检查 1 个文件，命中 26 处（词表：21 条规则）
 ```
 
 ```console
