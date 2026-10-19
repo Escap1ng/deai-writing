@@ -129,7 +129,7 @@ class Pane(QFrame):
             return RISK_COLOR.get(str(value), "divider_strong")
         return "gate_pass" if value == 0 else "gate_block"
 
-    def set_metrics(self, hits: int, risk: str, verdict: str) -> None:
+    def set_metrics(self, hits: int | str, risk: str, verdict: str) -> None:
         colors = {"通过": "gate_pass", "待改": "gate_warn", "阻断": "gate_block"}
         for (number, label), value, color_key in zip(
                 self.metrics, (hits, risk, verdict), ("text", RISK_COLOR.get(risk, "text_muted"), colors.get(verdict, "text_muted"))):
@@ -149,6 +149,14 @@ class Pane(QFrame):
     def set_html(self, markup: str) -> None:
         self.edit.setHtml(markup)
         self.edit.moveCursor(QTextCursor.MoveOperation.Start)
+
+    def append_text(self, value: str) -> None:
+        """流式增量：插到末尾并跟随光标，不重建整篇文档。"""
+        cursor = self.edit.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertText(value)
+        self.edit.setTextCursor(cursor)
+        self.edit.ensureCursorVisible()
 
     def _apply_line_spacing(self) -> None:
         fmt = QTextBlockFormat()

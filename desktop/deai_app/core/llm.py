@@ -113,6 +113,14 @@ def _delta_content(frame: str, secrets: Sequence[str] = ()) -> str:
     return message.get("content", "") if isinstance(message.get("content"), str) else ""
 
 
+def _open(request: urllib.request.Request, provider: Provider):
+    """本地服务绕过系统代理：Windows 的注册表代理会把 127.0.0.1 也接管成 502。"""
+    if provider.is_local():
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        return opener.open(request, timeout=provider.timeout)
+    return urllib.request.urlopen(request, timeout=provider.timeout)
+
+
 def stream_chat(
     provider: Provider,
     messages: Sequence[dict],
@@ -128,7 +136,7 @@ def stream_chat(
     plain: list[str] = []
     saw_event = False
     try:
-        response = urllib.request.urlopen(request, timeout=provider.timeout)
+        response = _open(request, provider)
     except urllib.error.HTTPError as exc:
         raise _http_error(exc, secrets) from exc
     except (urllib.error.URLError, socket.timeout) as exc:

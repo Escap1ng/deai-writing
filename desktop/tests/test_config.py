@@ -103,6 +103,15 @@ class TestProvider(unittest.TestCase):
             with self.subTest(host=host):
                 Provider(name="本地", base_url=f"http://{host}:11434/v1", model="m").validate()
 
+    def test_is_local_marks_only_loopback_hosts(self) -> None:
+        for url in ("http://127.0.0.1:11434/v1", "http://localhost/v1",
+                    "http://[::1]:8080/v1", "http://0.0.0.0:8080/v1"):
+            with self.subTest(url=url):
+                self.assertTrue(provider(base_url=url).is_local())
+        for url in ("https://api.example.com/v1", "http://192.168.1.5:8080/v1"):
+            with self.subTest(url=url):
+                self.assertFalse(provider(base_url=url).is_local())
+
     def test_masked_never_contains_secret(self) -> None:
         data = provider().masked()
         self.assertNotIn(SECRET, json.dumps(data, ensure_ascii=False))

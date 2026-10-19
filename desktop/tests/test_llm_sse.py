@@ -6,16 +6,22 @@
 from __future__ import annotations
 
 import json
+import os
 import socket
 import threading
 import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from unittest import mock
 
-from deai_app.core.config import ConfigError, Provider
+from deai_app.core import pipeline
+from deai_app.core.config import ConfigError, Provider, Settings
 from deai_app.core.llm import Cancelled, LLMError, _connect_hint, stream_chat
 
 API_KEY = "sk-local-SECRET-9876543210"
+CLEAN = "误差从 4.8% 降到 1.9%，来自 3 个班级共 120 份卷面复核。\n"
+SLOP = ("综上所述，随着人工智能技术的快速发展，本文对数据治理问题进行了深入研究。"
+        "研究表明，这一工作至关重要，有效提升了治理水平。\n")
 
 
 def frame(piece: str) -> bytes:
@@ -30,6 +36,7 @@ class _Server(ThreadingHTTPServer):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.received: list[dict] = []
+        self.script: list[str] = []
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -51,6 +58,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._stream([b": keep-alive\n\n", frame("好")], done=True)
         elif route == "json":
             self._json({"choices": [{"message": {"content": "整段直接回来了"}}]})
+        elif route == "scripted":
+            self._stream([frame(self.server.script.pop(0))], done=True)
         elif route == "jsonlist":
             self._json([])
         elif route == "jsonbad":
@@ -202,6 +211,13 @@ class TestStreamHappyPath(ServerCase):
         self.start("sse", api_key="")
         self.assertNotIn("Authorization", self.server.received[0]["headers"])
 
+    def test_local_request_bypasses_system_proxy(self) -> None:
+        # Windows 的注册表代理会把 127.0.0.1 也接管；本地服务必须直连
+        with mock.patch.dict(os.environ, {"HTTP_PROXY": "http://127.0.0.1:1",
+                                          "HTTPS_PROXY": "http://127.0.0.1:1"}):
+            text, _ = self.start("sse")
+        self.assertEqual(text, "去AI")
+
     def test_comment_lines_are_skipped(self) -> None:
         text, pieces = self.start("comment")
         self.assertEqual((text, pieces), ("好", ["好"]))
@@ -339,6 +355,25 @@ class TestTransportFailures(ServerCase):
         with self.assertRaises(ConfigError):
             stream_chat(broken, [{"role": "user", "content": "原文"}])
         self.assertEqual(self.server.received, [])
+
+
+class TestPipelineOverWire(ServerCase):
+    """闭环端到端：同一条本地连接上跑两轮，第二轮必须带上第一轮的复检命中。"""
+
+    def test_two_rounds_with_feedback(self) -> None:
+        self.server.script = [SLOP, CLEAN]
+        result = pipeline.rewrite("原文。", self.provider("scripted"),
+                                  Settings(max_rounds=2))
+        self.assertEqual(len(result.rounds), 2)
+        self.assertTrue(result.clean)
+        bodies = [json.loads(request["body"]) for request in self.server.received]
+        self.assertEqual(len(bodies), 2)
+        first_user = bodies[0]["messages"][1]["content"]
+        second_user = bodies[1]["messages"][1]["content"]
+        self.assertNotIn("上一版复检", first_user)
+        self.assertIn("上一版复检", second_user)
+        self.assertIn("模板腔", second_user)
+        self.assertEqual(bodies[1]["messages"][0]["role"], "system")
 
 
 if __name__ == "__main__":

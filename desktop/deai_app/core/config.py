@@ -57,6 +57,9 @@ class Provider:
             return base
         return f"{base}/chat/completions"
 
+    def is_local(self) -> bool:
+        return _is_local(self.base_url)
+
     def validate(self) -> None:
         if not self.base_url.startswith(("http://", "https://")):
             raise ConfigError(f"{self.name}：base_url 要以 http:// 或 https:// 开头")

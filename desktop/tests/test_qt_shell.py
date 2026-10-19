@@ -81,6 +81,21 @@ class TestQtShell(unittest.TestCase):
         self.assertGreaterEqual(tabs.height(), 24, "分段控件低于最小点击目标 24px")
         self.assertGreaterEqual(tabs.width(), 220)
 
+    def test_toolbar_fits_at_minimum_width(self) -> None:
+        original = self.win.size()
+        self.win.resize(int(self.theme.shell("min_width")), int(self.theme.shell("min_height")))
+        self.qapp.processEvents()
+        try:
+            for widget in (self.win.rewrite_button, self.win.check_button,
+                           self.win.strip_button, self.win.settings_button, self.win.status):
+                with self.subTest(widget=widget.text()):
+                    self.assertFalse(widget.isHidden())
+                    self.assertGreaterEqual(widget.width(), widget.sizeHint().width())
+            self.assertLessEqual(self.win.status.x() + self.win.status.width(), self.win.width())
+        finally:
+            self.win.resize(original)
+            self.qapp.processEvents()
+
     def test_band_does_not_overlap_editor(self) -> None:
         for pane in (self.win.input, self.win.output):
             with self.subTest(pane=pane.title_label.text()):
@@ -121,24 +136,24 @@ class TestQtShell(unittest.TestCase):
         tabs = self.win.titlebar.tabs
         self.win._select_tab(1)
         self.assertEqual(tabs.index, 1)
-        self.assertEqual(self.win.hint.text(), qt_app.HINTS[1])
+        self.assertEqual(self.win.status.text(), qt_app.HINTS[1])
         QTest.qWait(260)
         target = INSET + (tabs.width() - 2 * INSET) * 0.5
         self.assertAlmostEqual(tabs.pill, target, delta=1.0)
         self.win._select_tab(0)
         self.assertEqual(tabs.index, 0)
-        self.assertEqual(self.win.hint.text(), qt_app.HINTS[0])
+        self.assertEqual(self.win.status.text(), qt_app.HINTS[0])
 
     def test_mode_switch_responds_to_click_and_arrow_keys(self) -> None:
         tabs = self.win.titlebar.tabs
         x = int(INSET + (tabs.width() - 2 * INSET) * 0.75)
         QTest.mouseClick(tabs, Qt.MouseButton.LeftButton, pos=QPoint(x, tabs.height() // 2))
         self.assertEqual(tabs.index, 1)
-        self.assertEqual(self.win.hint.text(), qt_app.HINTS[1])
+        self.assertEqual(self.win.status.text(), qt_app.HINTS[1])
         tabs.setFocus()
         QTest.keyClick(tabs, Qt.Key.Key_Left)
         self.assertEqual(tabs.index, 0)
-        self.assertEqual(self.win.hint.text(), qt_app.HINTS[0])
+        self.assertEqual(self.win.status.text(), qt_app.HINTS[0])
 
     def test_output_view_switches_between_rows_and_whole_text(self) -> None:
         self.win.input.set_text(SLOP)

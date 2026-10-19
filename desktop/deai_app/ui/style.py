@@ -65,6 +65,34 @@ QPlainTextEdit, QTextEdit {{
     selection-color: {c('text')};
 }}
 QPlainTextEdit:read-only, QTextEdit:read-only {{ background: {c('card_bg')}; }}
+QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
+    background: {c('band_bg')}; border: 1px solid {c('divider')};
+    border-radius: 6px; padding: 6px 8px; min-height: 20px;
+    font-size: {f('meta')}pt; color: {c('text')};
+    selection-background-color: {c('selection_bg')}; selection-color: {c('text')};
+}}
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+    border: 1px solid {c('focus_ring')};
+}}
+QLineEdit:disabled {{ color: {c('text_muted')}; }}
+QComboBox::drop-down {{ border: none; width: 22px; }}
+QComboBox QAbstractItemView {{
+    background: {c('card_bg')}; border: 1px solid {c('divider')};
+    border-radius: 6px; padding: 4px;
+    selection-background-color: {c('selection_bg')}; selection-color: {c('text')};
+}}
+QSpinBox::up-button, QSpinBox::down-button,
+QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+    width: 16px; border: none; background: transparent;
+}}
+#dialogCard {{
+    background: {c('card_bg')}; border: 1px solid {c('divider')};
+    border-radius: 12px;
+}}
+#dialogTitle {{ font-size: {f('emphasis')}pt; font-weight: 700; }}
+#sectionTitle {{ font-size: {f('meta')}pt; font-weight: 600; color: {c('text_secondary')}; }}
+#fieldLabel {{ font-size: {f('meta')}pt; color: {c('text_secondary')}; }}
+#dialogError {{ font-size: {f('meta')}pt; color: {c('gate_block')}; }}
 #band {{ background: {c('band_bg')}; border-top: 1px solid {c('divider')}; }}
 #metricNum {{ font-size: {f('number')}pt; font-weight: 700; color: {c('text')}; }}
 #metricLab {{ font-size: {f('caption')}pt; color: {c('text_muted')}; }}
