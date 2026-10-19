@@ -9,6 +9,7 @@ import json
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from deai_app import paths
 
@@ -123,8 +124,19 @@ def _read_json(path: Path, what: str) -> dict | list:
 
 
 def _is_local(base_url: str) -> bool:
-    host = base_url.split("//", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+    try:
+        host = urlsplit(base_url).hostname or ""
+    except ValueError:
+        return False
     return host in ("127.0.0.1", "localhost", "::1", "0.0.0.0")
+
+
+def _number(item: dict, key: str, cast, default, label: str):
+    value = item.get(key, default)
+    try:
+        return cast(value)
+    except (TypeError, ValueError) as exc:
+        raise ConfigError(f"供应商“{label}”的 {key} 不是有效数字：{value!r}") from exc
 
 
 def example_path() -> Path:
@@ -135,24 +147,33 @@ def load_providers(directory: Path | None = None) -> list[Provider]:
     """读用户的 providers.json；没有就读仓库自带的示例（示例不含密钥）。"""
     folder = directory or config_dir()
     path = folder / PROVIDERS_FILE
-    data = _read_json(path, "供应商配置") if path.is_file() else _read_json(example_path(), "示例配置")
+    if path.is_file():
+        data = _read_json(path, "供应商配置")
+    else:
+        path = example_path()
+        data = _read_json(path, "示例配置")
     if isinstance(data, list):
         raw = data
-    else:
+    elif isinstance(data, dict):
         raw = data.get("providers", [])
+        if not isinstance(raw, list):
+            raise ConfigError(f"供应商配置里的 providers 应是数组：{path}")
+    else:
+        raise ConfigError(f"供应商配置应是数组或含 providers 数组的对象：{path}")
     providers: list[Provider] = []
     for item in raw:
         if not isinstance(item, dict) or "base_url" not in item or "model" not in item:
             continue
+        name = str(item.get("name") or item["model"])
         providers.append(
             Provider(
-                name=str(item.get("name") or item["model"]),
+                name=name,
                 base_url=str(item["base_url"]),
                 model=str(item["model"]),
                 api_key=str(item.get("api_key", "")),
-                temperature=float(item.get("temperature", 0.3)),
-                max_tokens=int(item.get("max_tokens", 4096)),
-                timeout=int(item.get("timeout", 120)),
+                temperature=_number(item, "temperature", float, 0.3, name),
+                max_tokens=_number(item, "max_tokens", int, 4096, name),
+                timeout=_number(item, "timeout", int, 120, name),
             )
         )
     return providers

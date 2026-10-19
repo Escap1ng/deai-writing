@@ -74,6 +74,8 @@ def _http_error(exc: urllib.error.HTTPError, secrets: Sequence[str]) -> LLMError
         snippet = _decode(exc.read(_MAX_BODY_SNIPPET)).strip().replace("\n", " ")
     except OSError:
         pass
+    finally:
+        exc.close()
     hint = _HTTP_HINT.get(code, "服务端返回错误（HTTP {code}）").format(code=code)
     if code >= 500:
         hint = f"供应商侧错误（HTTP {code}）：稍后重试或换模型"
@@ -81,19 +83,33 @@ def _http_error(exc: urllib.error.HTTPError, secrets: Sequence[str]) -> LLMError
     return LLMError(config.redact(hint + detail, secrets))
 
 
-def _delta_content(frame: str) -> str:
+def _delta_content(frame: str, secrets: Sequence[str] = ()) -> str:
     try:
         data = json.loads(frame)
     except ValueError as exc:
-        raise LLMError(f"响应帧不是合法 JSON：{frame[:80]!r}（{exc}）") from exc
-    choices = data.get("choices") or []
+        raise LLMError(config.redact(
+            f"响应帧不是合法 JSON：{frame[:80]!r}（{exc}）", secrets)) from exc
+    if not isinstance(data, dict):
+        raise LLMError(config.redact(f"响应帧不是 JSON 对象：{frame[:80]!r}", secrets))
+    choices = data.get("choices")
+    if choices is None:
+        return ""
+    if not isinstance(choices, list):
+        raise LLMError("响应帧里的 choices 不是数组")
     if not choices:
         return ""
-    delta = choices[0].get("delta") or {}
+    first = choices[0]
+    if not isinstance(first, dict):
+        raise LLMError("响应帧里的 choices[0] 不是对象")
+    delta = first.get("delta") or {}
+    if not isinstance(delta, dict):
+        delta = {}
     if isinstance(delta.get("content"), str):
         return delta["content"]
     # 少数兼容层把正文放在 message.content 而非 delta.content
-    message = choices[0].get("message") or {}
+    message = first.get("message") or {}
+    if not isinstance(message, dict):
+        return ""
     return message.get("content", "") if isinstance(message.get("content"), str) else ""
 
 
@@ -141,7 +157,7 @@ def stream_chat(
                 frame = text[len(_PREFIX):].strip()
                 if frame == "[DONE]":
                     break
-                piece = _delta_content(frame)
+                piece = _delta_content(frame, secrets)
                 if piece:
                     parts.append(piece)
                     if emit:
@@ -170,10 +186,14 @@ def _fallback_non_sse(lines: list[str], provider: Provider, emit: Emit | None,
         data = json.loads(raw)
     except ValueError as exc:
         raise LLMError(config.redact(f"响应既不是 SSE 也不是 JSON：{raw[:120]!r}（{exc}）", secrets)) from exc
-    choices = data.get("choices") or []
-    if not choices:
+    if not isinstance(data, dict):
+        raise LLMError("响应不是含 choices 的 JSON 对象，无法解析")
+    choices = data.get("choices")
+    if not isinstance(choices, list) or not choices:
         raise LLMError(config.redact(f"响应缺少 choices：{raw[:160]!r}", secrets))
-    content = (choices[0].get("message") or {}).get("content", "")
+    first = choices[0] if isinstance(choices[0], dict) else {}
+    message = first.get("message")
+    content = message.get("content", "") if isinstance(message, dict) else ""
     if not isinstance(content, str):
         raise LLMError("响应里的正文不是文本，无法解析")
     if content and emit:
