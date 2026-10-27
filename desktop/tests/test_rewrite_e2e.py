@@ -24,6 +24,13 @@ from deai_app.ui.theme import load_theme  # noqa: E402
 CLEAN = "误差从 4.8% 降到 1.9%，来自 3 个班级共 120 份卷面复核。\n"
 SLOP = ("综上所述，随着人工智能技术的快速发展，本文对数据治理问题进行了深入研究。"
         "研究表明，这一工作至关重要，有效提升了治理水平。\n")
+TRANSLATED = "The baseline error dropped from 4.8% to 1.9% across 120 marked papers.\n"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CLEAN_EN = (REPO_ROOT / "examples" / "clean-sample-en.md").read_bytes().decode("utf-8-sig")
+
+
+def has_cjk(text: str) -> bool:
+    return any("\u3400" <= ch <= "\u9fff" for ch in text)
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -34,14 +41,29 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802 - http.server 命名
         length = int(self.headers.get("Content-Length") or 0)
-        self.rfile.read(length)
+        raw = self.rfile.read(length)
         self.server.requests += 1
+        try:
+            payload = json.loads(raw)
+            messages = payload.get("messages") or []
+            system = messages[0].get("content", "") if messages else ""
+            user = messages[1].get("content", "") if len(messages) > 1 else ""
+        except ValueError:
+            system, user = "", ""
+        if "学术论文翻译" in system:
+            output = TRANSLATED
+        elif TRANSLATED.strip() in user:
+            output = CLEAN_EN
+        elif has_cjk(user):
+            output = CLEAN
+        else:
+            output = CLEAN_EN
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.end_headers()
-        for start in range(0, len(CLEAN), 8):
-            piece = CLEAN[start:start + 8]
-            data = json.dumps({"choices": [{"delta": {"content": piece}}]})
+        for start in range(0, len(output), 8):
+            piece = output[start:start + 8]
+            data = json.dumps({"choices": [{"delta": {"content": piece}}]}, ensure_ascii=False)
             self.wfile.write(f"data: {data}\n\n".encode("utf-8"))
             self.wfile.flush()
             time.sleep(0.005)
@@ -102,6 +124,7 @@ class TestRewriteEndToEnd(unittest.TestCase):
         self.win._last_gate = None
         self.win._last_source = ""
         self.win._worker = None
+        self.win._select_tab(0)
         self.win._output_view = 1
         self.win.output_view.select(1, notify=False)
         self.win.rewrite_button.setText("AI 改写")
@@ -130,6 +153,27 @@ class TestRewriteEndToEnd(unittest.TestCase):
         self.assertEqual(self.win.rewrite_button.text(), "AI 改写")
         self.assertTrue(self.win.check_button.isEnabled())
         self.assertTrue(self.win.settings_button.isEnabled())
+
+    def test_translation_mode_translates_then_deais(self) -> None:
+        self.win._select_tab(1)
+        self.assertEqual(self.win.rewrite_button.text(), "AI 翻译")
+        before = self.server.requests
+        self.win.start_primary_action()
+        self.assertEqual(self.win.rewrite_button.text(), "停止生成")
+
+        deadline = time.monotonic() + 10
+        while self.win._worker is not None and time.monotonic() < deadline:
+            self.qapp.processEvents()
+            time.sleep(0.01)
+        self.qapp.processEvents()
+
+        self.assertIsNone(self.win._worker, "翻译线程未在 10 秒内结束")
+        self.assertEqual(self.server.requests - before, 2, "应为翻译 + 一轮译后去 AI")
+        self.assertEqual(self.win._last_result, CLEAN_EN.strip())
+        self.assertIn("翻译完成", self.win.status.text())
+        self.assertIn("中文→英文", self.win.status.text())
+        self.assertIn("门禁：通过", self.win.status.text())
+        self.assertEqual(self.win.rewrite_button.text(), "AI 翻译")
 
 
 if __name__ == "__main__":

@@ -27,10 +27,10 @@ from PySide6.QtWidgets import (
 
 from deai_app import VERSION
 from deai_app.bridge import EngineError, engines
-from deai_app.core import checkup, config
+from deai_app.core import checkup, config, translate as translator
 from deai_app.ui import motion, report, style
 from deai_app.ui.panes import Pane
-from deai_app.ui.rewrite import RewriteWorker
+from deai_app.ui.rewrite import RewriteWorker, TranslationWorker
 from deai_app.ui.segmented import SegmentedControl
 from deai_app.ui.settings import SettingsDialog
 from deai_app.ui.theme import Theme, load_theme
@@ -39,7 +39,7 @@ MODES = ("降 AI 味", "学术翻译")
 VIEW_MODES = ("逐条", "整段")
 HINTS = {
     0: "Ctrl+Enter 改写 · Ctrl+O 载入",
-    1: "学术翻译将在 M4 接入；改写与体检照常可用",
+    1: "Ctrl+Enter 翻译 · 译文默认再过降 AI",
 }
 INPUT_PLACEHOLDER = "把稿子贴在这里……（Ctrl+O 可载入 .md / .txt / .tex）"
 OUTPUT_PLACEHOLDER = "改写结果与体检报告出现在这里"
@@ -202,7 +202,7 @@ class DeaiApp(QWidget):
         self.rewrite_button = QPushButton("AI 改写"); self.rewrite_button.setObjectName("ink")
         self.rewrite_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.rewrite_button.setToolTip("调用已配置的模型改写，并在每轮后跑本地三关（Ctrl+Enter）")
-        self.rewrite_button.clicked.connect(self.start_rewrite)
+        self.rewrite_button.clicked.connect(self.start_primary_action)
         bar.addWidget(self.rewrite_button)
         self.check_button = QPushButton("本地三关体检"); self.check_button.setObjectName("ghost")
         self.check_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -241,7 +241,7 @@ class DeaiApp(QWidget):
         self.input.refresh_meta()
         self._reload_config()
         for sequence, handler in (
-            ("Ctrl+Return", self.start_rewrite), ("Ctrl+Shift+Return", self.run_check),
+            ("Ctrl+Return", self.start_primary_action), ("Ctrl+Shift+Return", self.run_check),
             ("Ctrl+1", lambda: self._select_tab(0)),
             ("Ctrl+2", lambda: self._select_tab(1)), ("Ctrl+O", self._load), ("Ctrl+S", self._save),
             ("Ctrl+,", self._open_settings),
@@ -289,6 +289,30 @@ class DeaiApp(QWidget):
             self._say(f"检查失败：{exc}")
             return None
 
+    def _primary_label(self) -> str:
+        return "AI 翻译" if self._mode == 1 else "AI 改写"
+
+    def _primary_hint(self) -> str:
+        if self._mode == 1:
+            return "学术翻译，译文默认再过降 AI（Ctrl+Enter）"
+        return "调用已配置的模型改写，并在每轮后跑本地三关（Ctrl+Enter）"
+
+    def _direction_label(self) -> str:
+        source = translator.resolve_source(self.input.text(), self._settings.lang)
+        target = translator.resolve_target(source, self._settings.translate_target)
+        return translator.direction_label(source, target)
+
+    def start_primary_action(self) -> None:
+        if self._worker is not None:
+            self._worker.cancel()
+            self.rewrite_button.setEnabled(False)
+            self._say("正在停止生成……")
+            return
+        if self._mode == 1:
+            self.start_translation()
+        else:
+            self.start_rewrite()
+
     def _idle_status(self) -> str:
         base = f"就绪 · v{VERSION}"
         if self._active_provider is None:
@@ -311,6 +335,24 @@ class DeaiApp(QWidget):
         else:
             self.status.setText(self._idle_status())
 
+    def _prepare_generation(self, text: str) -> bool:
+        local = self._local_check(text)
+        if local is None:
+            return False
+        self.input.set_gate(len(local.phrasing), local.style_risk, local.invisible_total)
+        self._last_gate = None
+        self._last_source = ""
+        self._last_result = None
+        self._stream_text = ""
+        self._output_view = 1
+        self.output_view.select(1, notify=False)
+        self.output.set_text("")
+        self.output.set_metrics("—", "—", "生成中")
+        self.rewrite_button.setText("停止生成")
+        self.check_button.setEnabled(False)
+        self.settings_button.setEnabled(False)
+        return True
+
     def start_rewrite(self) -> None:
         if self._worker is not None:
             self._worker.cancel()
@@ -325,23 +367,9 @@ class DeaiApp(QWidget):
         if error:
             self._open_settings(f"先配置接口：{error}")
             return
-
-        local = self._local_check(text)
-        if local is None:
+        if not self._prepare_generation(text):
             return
-        self.input.set_gate(len(local.phrasing), local.style_risk, local.invisible_total)
-        self._last_gate = None
-        self._last_source = ""
-        self._last_result = None
-        self._stream_text = ""
-        self._output_view = 1
-        self.output_view.select(1, notify=False)
-        self.output.set_text("")
-        self.output.set_metrics("—", "—", "生成中")
 
-        self.rewrite_button.setText("停止生成")
-        self.check_button.setEnabled(False)
-        self.settings_button.setEnabled(False)
         self._worker = RewriteWorker(text, self._active_provider, self._settings, self)
         self._worker.round_started.connect(self._on_round_start)
         self._worker.delta.connect(self._on_delta)
@@ -352,6 +380,58 @@ class DeaiApp(QWidget):
         self._worker.finished.connect(self._on_worker_finished)
         self._worker.start()
         self._say(f"改写中 · {self._active_provider.name} · {self._active_provider.model}")
+
+    def start_translation(self) -> None:
+        if self._worker is not None:
+            self._worker.cancel()
+            self.rewrite_button.setEnabled(False)
+            self._say("正在停止生成……")
+            return
+        text = self.input.text()
+        if not text.strip():
+            self._say("输入是空的：先贴一段稿子")
+            return
+        error = self._provider_error(self._active_provider)
+        if error:
+            self._open_settings(f"先配置接口：{error}")
+            return
+        if not self._prepare_generation(text):
+            return
+
+        self._worker = TranslationWorker(text, self._active_provider, self._settings, self)
+        self._worker.stage_started.connect(self._on_translation_stage)
+        self._worker.delta.connect(self._on_delta)
+        self._worker.round_done.connect(self._on_round_done)
+        self._worker.done.connect(self._on_translation_done)
+        self._worker.failed.connect(self._on_rewrite_failed)
+        self._worker.cancelled.connect(self._on_rewrite_cancelled)
+        self._worker.finished.connect(self._on_worker_finished)
+        self._worker.start()
+        self._say(f"翻译中 · {self._direction_label()} · {self._active_provider.name}"
+                  f" · {self._active_provider.model}")
+
+    def _on_translation_stage(self, stage: str, index: int) -> None:
+        self.output.set_text("")
+        self._stream_text = ""
+        if stage == translator.STAGE_TRANSLATE:
+            self._say(f"翻译中 · {self._direction_label()}")
+        else:
+            self._say(f"译文已生成 · 去 AI 第 {index} 轮")
+
+    def _on_translation_done(self, result) -> None:
+        self._last_gate = result.gate
+        self._last_source = result.text
+        self._last_result = result.text
+        self._stream_text = result.text
+        self.output.set_text(result.text)
+        self._render_output()
+        verdict = "通过" if result.gate.clean else ("阻断" if result.gate.blocked else "待改")
+        self.output.set_metrics(len(result.gate.phrasing) + len(result.gate.style),
+                                result.gate.style_risk, verdict)
+        rounds = f" · 去 AI {len(result.rounds)} 轮" if result.rounds else ""
+        self._say(f"翻译完成 · {result.direction()}{rounds} · "
+                  f"词表 {len(result.gate.phrasing)} 处 · 结构 {result.gate.style_risk}"
+                  f" · 门禁：{verdict}")
 
     def _on_round_start(self, index: int) -> None:
         if index > 1:
@@ -396,7 +476,7 @@ class DeaiApp(QWidget):
         self._worker = None
         if worker is not None:
             worker.deleteLater()
-        self.rewrite_button.setText("AI 改写")
+        self.rewrite_button.setText(self._primary_label())
         self.rewrite_button.setEnabled(True)
         self.check_button.setEnabled(True)
         self.settings_button.setEnabled(True)
@@ -505,7 +585,13 @@ class DeaiApp(QWidget):
         self._say("已清空输入")
 
     def _switch_mode(self, index: int) -> None:
+        if self._worker is not None:
+            self.titlebar.select_tab(self._mode)
+            self._say("生成进行中：结束或停止后再切换模式")
+            return
         self._mode = index
+        self.rewrite_button.setText(self._primary_label())
+        self.rewrite_button.setToolTip(self._primary_hint())
         self._say(HINTS[index])
 
     def _select_tab(self, index: int) -> None:

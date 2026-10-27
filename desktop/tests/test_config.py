@@ -244,7 +244,8 @@ class TestSettingsFile(unittest.TestCase):
 
     def test_save_load_roundtrip(self) -> None:
         settings = Settings(active_provider="甲", preset="公文", intensity="高",
-                            max_rounds=3, lang="en", auto_deai_after_translate=False)
+                            max_rounds=3, lang="en", translate_target="英文",
+                            auto_deai_after_translate=False)
         path = config.save_settings(settings, self.dir)
         self.assertEqual(path, self.dir / config.SETTINGS_FILE)
         self.assertEqual(config.load_settings(self.dir), settings)

@@ -15,16 +15,19 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QDialog, QLineEdit  # noqa: E402
 
-from deai_app.core import config, llm, pipeline  # noqa: E402
+from deai_app.core import config, llm, pipeline, translate  # noqa: E402
 from deai_app.core.config import Provider, Settings  # noqa: E402
 from deai_app.ui import app as qt_app  # noqa: E402
-from deai_app.ui.rewrite import RewriteWorker  # noqa: E402
+from deai_app.ui.rewrite import RewriteWorker, TranslationWorker  # noqa: E402
 from deai_app.ui.settings import SettingsDialog  # noqa: E402
 from deai_app.ui.theme import load_theme  # noqa: E402
 
 CLEAN = "误差从 4.8% 降到 1.9%，来自 3 个班级共 120 份卷面复核。\n"
 SLOP = ("综上所述，随着人工智能技术的快速发展，本文对数据治理问题进行了深入研究。"
         "研究表明，这一工作至关重要，有效提升了治理水平。\n")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CLEAN_EN = (REPO_ROOT / "examples" / "clean-sample-en.md").read_bytes().decode("utf-8-sig")
+TRANSLATED = "The baseline error dropped from 4.8% to 1.9% across 120 marked papers.\n"
 PROVIDER = Provider(name="测试", base_url="http://127.0.0.1:9/v1", model="m", api_key="")
 
 
@@ -42,6 +45,18 @@ def rewrite_result(output: str) -> pipeline.RewriteResult:
         return output
 
     return pipeline.rewrite("原文一段。", PROVIDER, Settings(max_rounds=1), chat=chat)
+
+
+def translation_result() -> translate.TranslationResult:
+    outputs = [TRANSLATED, CLEAN_EN]
+
+    def chat(*args, **kwargs):
+        piece = outputs.pop(0)
+        if kwargs.get("emit"):
+            kwargs["emit"](piece)
+        return piece
+
+    return translate.translate(SLOP, PROVIDER, Settings(max_rounds=1), chat=chat)
 
 
 class SettingsCase(unittest.TestCase):
@@ -118,6 +133,13 @@ class TestSettingsDialog(SettingsCase):
         self.assertIsNone(dialog.settings_out)
         self.assertIn("不能重复", dialog.error.text())
 
+    def test_translation_target_is_saved(self) -> None:
+        dialog = self.dialog("本地", translate_target="英文")
+        self.assertEqual(dialog.target.currentText(), "英文")
+        dialog.target.setCurrentText("中文")
+        dialog._save()
+        self.assertEqual(config.load_settings(self.dir).translate_target, "中文")
+
     def test_add_and_delete_provider(self) -> None:
         dialog = self.dialog()
         self.assertEqual(dialog.combo.count(), 2)
@@ -140,7 +162,8 @@ class TestSettingsDialog(SettingsCase):
         self.assertLessEqual(dialog.height(), 760)
         limit = dialog.width() - 14
         for widget in (dialog.combo, dialog.name_edit, dialog.base_edit,
-                       dialog.model_edit, dialog.preset, dialog.rounds):
+                       dialog.model_edit, dialog.preset, dialog.intensity,
+                       dialog.target, dialog.rounds):
             with self.subTest(widget=widget.objectName() or type(widget).__name__):
                 right = widget.mapTo(dialog, widget.rect().topLeft()).x() + widget.width()
                 self.assertLessEqual(right, limit)
@@ -174,6 +197,7 @@ class TestRewriteHandlers(unittest.TestCase):
         self.win._last_result = None
         self.win._stream_text = ""
         self.win._worker = None
+        self.win._select_tab(0)
         self.win._output_view = 1
         self.win.output_view.select(1, notify=False)
         self.qapp.processEvents()
@@ -234,6 +258,40 @@ class TestRewriteHandlers(unittest.TestCase):
     def test_missing_provider_is_explained(self) -> None:
         self.assertIn("接口设置", self.win._provider_error(None))
 
+    def test_mode_switch_changes_primary_action_label(self) -> None:
+        self.win._select_tab(1)
+        self.assertEqual(self.win._mode, 1)
+        self.assertEqual(self.win.rewrite_button.text(), "AI 翻译")
+        self.win._select_tab(0)
+        self.assertEqual(self.win.rewrite_button.text(), "AI 改写")
+
+    def test_primary_action_dispatches_by_mode(self) -> None:
+        with mock.patch.object(self.win, "start_translation") as translated, \
+                mock.patch.object(self.win, "start_rewrite") as rewritten:
+            self.win._mode = 1
+            self.win.start_primary_action()
+            translated.assert_called_once_with()
+            self.win._mode = 0
+            self.win.start_primary_action()
+            rewritten.assert_called_once_with()
+
+    def test_mode_switch_is_blocked_while_generating(self) -> None:
+        self.win._worker = mock.Mock()
+        try:
+            self.win._select_tab(1)
+            self.assertEqual(self.win._mode, 0)
+            self.assertIn("生成进行中", self.win.status.text())
+        finally:
+            self.win._worker = None
+
+    def test_translation_done_delivers_final_text(self) -> None:
+        self.win._on_translation_done(translation_result())
+        self.assertEqual(self.win._last_result, CLEAN_EN.strip())
+        self.assertIn("翻译完成", self.win.status.text())
+        self.assertIn("中文→英文", self.win.status.text())
+        self.assertIn("去 AI 1 轮", self.win.status.text())
+        self.assertIn("门禁：通过", self.win.status.text())
+
 
 class TestRewriteWorker(unittest.TestCase):
     @classmethod
@@ -285,6 +343,19 @@ class TestRewriteWorker(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("改写意外中断", errors[0])
         self.assertIn("boom", errors[0])
+
+    def test_translation_worker_emits_stages_and_result(self) -> None:
+        results, stages = [], []
+        worker = TranslationWorker("原文", PROVIDER, Settings(max_rounds=1))
+        worker.done.connect(results.append)
+        worker.stage_started.connect(lambda stage, index: stages.append((stage, index)))
+        with mock.patch.object(llm, "stream_chat", side_effect=[TRANSLATED, CLEAN_EN]):
+            worker.run()
+        self.qapp.processEvents()
+        self.assertEqual(stages, [("translate", 0), ("deai", 1)])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].text, CLEAN_EN.strip())
+        self.assertEqual(results[0].direction(), "中文→英文")
 
 
 if __name__ == "__main__":

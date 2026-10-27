@@ -25,7 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from deai_app.core import config, prompt
+from deai_app.core import config, prompt, translate
 from deai_app.ui.theme import Theme
 
 DIALOG_WIDTH = 580
@@ -77,6 +77,7 @@ class SettingsDialog(QDialog):
         column.addLayout(self._build_rewrite_form())
         self.preset.setCurrentText(settings.preset)
         self.intensity.setCurrentText(settings.intensity)
+        self.target.setCurrentText(settings.translate_target)
         self.rounds.setValue(max(1, min(settings.max_rounds, 4)))
 
         self.error = QLabel(""); self.error.setObjectName("dialogError")
@@ -174,10 +175,14 @@ class SettingsDialog(QDialog):
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.preset = QComboBox(); self.preset.addItems(prompt.PRESETS)
         self.intensity = QComboBox(); self.intensity.addItems(prompt.INTENSITIES)
+        styles = QWidget(); styles_layout = QHBoxLayout(styles)
+        styles_layout.setContentsMargins(0, 0, 0, 0); styles_layout.setSpacing(8)
+        styles_layout.addWidget(self.preset, 1); styles_layout.addWidget(self.intensity, 1)
+        self.target = QComboBox(); self.target.addItems(translate.TARGETS)
         self.rounds = QSpinBox(); self.rounds.setRange(1, 4); self.rounds.setValue(2)
         self.rounds.setSuffix(" 轮")
-        self._add_row(form, "预设", self.preset)
-        self._add_row(form, "强度", self.intensity)
+        self._add_row(form, "预设与强度", styles)
+        self._add_row(form, "翻译方向", self.target)
         self._add_row(form, "复检轮次", self.rounds)
         return form
 
@@ -288,6 +293,7 @@ class SettingsDialog(QDialog):
                 intensity=self.intensity.currentText(),
                 max_rounds=int(self.rounds.value()),
                 lang=self._settings.lang,
+                translate_target=self.target.currentText(),
                 auto_deai_after_translate=self._settings.auto_deai_after_translate,
             )
             config.save_settings(settings)

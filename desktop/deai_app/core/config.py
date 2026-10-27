@@ -81,6 +81,7 @@ class Settings:
     intensity: str = "中"
     max_rounds: int = 2
     lang: str = "自动"
+    translate_target: str = "自动"
     auto_deai_after_translate: bool = True
 
 
