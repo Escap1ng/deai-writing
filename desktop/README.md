@@ -64,6 +64,23 @@ python3 code/check_style.py article.md --json
 - 系统关闭「显示动画」时一律瞬时到位；`tests/test_motion.py` 同时验证 100–300ms 的时长边界、
   缓动类型、滚轮落点与降级路径。
 
+## 打包成 exe
+
+打包清单只在 `build/bundle.py` 说一次：`code/` 的引擎与词表进 bundle 的 `code/`，
+`deai_app/assets/` 进同名相对目录，`paths.py` 在 frozen 模式下按同一位置找它们；
+`tests/test_packaging.py` 钉住这条对应关系。
+
+```bash
+python3 -m pip install -i https://pypi.tuna.tsinghua.edu.cn/simple pyinstaller
+cd desktop
+python3 build/build.py --dry-run   # 只打印 PyInstaller 命令，不装不跑
+python3 build/build.py             # 目录版：build/dist/deai/deai.exe
+python3 build/build.py --onefile   # 单文件版：build/dist/deai.exe，冷启动要先解包
+```
+
+默认出目录版：启动不慢，杀软误报也少。产物只含程序与规则，用户的
+`providers.json`（含密钥）始终留在 `%APPDATA%\deai\`，不会被打进 exe。
+
 ## 测试
 
 ```bash

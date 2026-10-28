@@ -5,8 +5,11 @@ __pycache__/
 .venv/
 venv/
 
-# 桌面应用构建产物（desktop/build/BUILD.md 里是从源码重建 exe 的步骤，不要提交 dist）
-desktop/build/
+# 桌面应用：打包清单与脚本（desktop/build/bundle.py、build.py）要跟踪，只忽略产物
+desktop/build/dist/
+desktop/build/work/
+desktop/build/*.spec
+desktop/build/*.pyz
 desktop/dist/
 desktop/*.spec.bak
 

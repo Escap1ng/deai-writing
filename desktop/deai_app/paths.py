@@ -11,7 +11,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = APP_DIR / "assets"
 
-#: 三关检查器的单一来源；打包时由 desktop/build/deai.spec 以 code/ 同名目录放入 bundle。
+#: 三关检查器的单一来源；打包时由 desktop/build/build.py 以 code/ 同名目录放入 bundle。
 CODE_DIR = APP_DIR.parent.parent / "code"
 
 
