@@ -81,6 +81,10 @@ python3 code/selfcheck.py                              # 12 项断言：正反�
 
 改过词表、阈值或示例后必跑。
 
+## 桌面应用
+
+`desktop/` 是同一套三关引擎的无边框 Qt 工作台：本地体检、模型改写、学术翻译，以及打包成 exe 的脚本。安装、动效与打包命令见 [desktop/README.md](desktop/README.md)。
+
 ## 目录结构
 
 ```
@@ -88,6 +92,7 @@ deai-writing/
 ├── SKILL.md                       # 技能入口：定位、三道关、快速流程、强制项摘要、与其他技能的关系
 ├── README.md                      # 本文件（中文）：快速开始、目录结构、分类依据与扩展约定
 ├── README.en.md                   # 英文版 README：与 README.md 同构
+├── desktop/                       # 桌面应用：无边框 Qt 界面、改写与翻译、exe 打包
 ├── code/                          # 可执行脚本与数据
 │   ├── check_phrasing.py          #   词表级检查器：扫模板腔、套话、空泛、伪洞察，命中退出 1
 │   ├── phrasing-blacklist.json    #   中英词表与句式规则（单一事实源，加词只改它）
@@ -117,8 +122,9 @@ deai-writing/
 ## 分类依据
 
 - **一级按内容类型分**：`code/` `docs/` `examples/`。这套目录词表在跨技能检索时语义不变，`code/` 恒为「可执行脚本与数据」，`docs/` 恒为「规范」，`examples/` 恒为「可复现示例」。
+- **`desktop/` 是应用目录**：只放桌面端源码、测试与打包脚本，不参与技能检索；上面三类的内容约定不变。
 - **词表是数据不是代码**：`code/phrasing-blacklist.json` 既可被检查器读取，也可被第三方程序消费；加词只改这一处，`check_phrasing.py` 与 `docs/deai-rules.md` 随之生效。
-- **层级最深 2 层**：`code/` `docs/` `examples/` 下方直接放文件，不再向下嵌套。
+- **层级最深 2 层**：`code/` `docs/` `examples/` 下方直接放文件，不再向下嵌套（`desktop/` 按 Python 包结构组织，不受此限）。
 
 ## 扩展约定
 

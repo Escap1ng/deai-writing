@@ -75,6 +75,10 @@ python3 code/selfcheck.py                              # 12 assertions: fixtures
 
 Run it whenever you change the word list, a threshold or a fixture.
 
+## Desktop app
+
+`desktop/` is a frameless Qt workbench built on the same three gates: local checks, model rewrite, academic translation, and the exe build script. Setup, motion and packaging live in [desktop/README.md](desktop/README.md).
+
 ## Repository layout
 
 ```
@@ -82,6 +86,7 @@ deai-writing/
 ├── SKILL.md                       # Entry point: scope, three gates, quick flow, hard requirements
 ├── README.md                      # Chinese README: quick start, layout, rationale, conventions
 ├── README.en.md                   # This file: the same structure in English
+├── desktop/                       # Desktop app: frameless Qt UI, rewrite and translation, exe build
 ├── code/                          # Runnable scripts and data
 │   ├── check_phrasing.py          #   Word-list checker: template openers, filler, empty claims, fake insight
 │   ├── phrasing-blacklist.json    #   Chinese and English rules (single source of truth; add words here only)
@@ -111,8 +116,9 @@ The English slop pattern catalogue and its sentence-level taxonomy come from [pe
 ## Layout rationale
 
 - **Top level split by content type**: `code/`, `docs/`, `examples/`. The vocabulary is stable across searches: `code/` is always runnable scripts and data, `docs/` is always specification, `examples/` is always reproducible fixtures.
+- **`desktop/` is the application directory**: desktop sources, tests and build scripts only. It is not part of the skill vocabulary, and the three content types above keep their meaning.
 - **The word list is data, not code**: `code/phrasing-blacklist.json` is read by the checker and can also be consumed by third-party programs. Adding a word means editing that one file, and `check_phrasing.py` plus `docs/deai-rules.md` follow.
-- **Two levels deep at most**: files sit directly under `code/`, `docs/` and `examples/`.
+- **Two levels deep at most**: files sit directly under `code/`, `docs/` and `examples/` (`desktop/` follows Python package layout and is exempt).
 
 ## Extending it
 

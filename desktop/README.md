@@ -78,6 +78,14 @@ python3 build/build.py             # 目录版：build/dist/deai/deai.exe
 python3 build/build.py --onefile   # 单文件版：build/dist/deai.exe，冷启动要先解包
 ```
 
+构建后先用 exe 自检 bundle 内的引擎与主题（windowed exe 没有 stdout，结果写文件）：
+
+```bash
+build/dist/deai/deai.exe --smoke --out smoke.txt
+```
+
+目录版当前约 94 MB；`--smoke` 应输出 5 项 `[PASS]` 与「全部通过」。
+
 默认出目录版：启动不慢，杀软误报也少。产物只含程序与规则，用户的
 `providers.json`（含密钥）始终留在 `%APPDATA%\deai\`，不会被打进 exe。
 
