@@ -81,10 +81,13 @@ python3 build/build.py --onefile   # 单文件版：build/dist/deai.exe，冷启
 构建后先用 exe 自检 bundle 内的引擎与主题（windowed exe 没有 stdout，结果写文件）：
 
 ```bash
-build/dist/deai/deai.exe --smoke --out smoke.txt
+build/dist/deai/deai.exe --smoke --out smoke.txt      # 目录版
+build/dist/deai.exe --smoke --out smoke.txt           # 单文件版
 ```
 
-目录版当前约 94 MB；`--smoke` 应输出 5 项 `[PASS]` 与「全部通过」。
+两种产物实测都是 5 项 `[PASS]`、退出码 0。目录版约 94 MB；单文件版 38,544,607 字节（约 37 MB），
+本机启动到自检完成 1.4–1.8 秒，窗口 1.4 秒出现、关闭后退出码 0。单文件版每次启动先把 bundle
+解到临时目录，杀软误报尚未实测。
 
 默认出目录版：启动不慢，杀软误报也少。产物只含程序与规则，用户的
 `providers.json`（含密钥）始终留在 `%APPDATA%\deai\`，不会被打进 exe。
