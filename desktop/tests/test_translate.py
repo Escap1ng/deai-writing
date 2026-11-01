@@ -119,5 +119,72 @@ class TestTranslateFlow(unittest.TestCase):
         self.assertIn("把中文文稿译成中文", script.calls[0][0]["content"])
 
 
+class TestDeaiDraftFlow(unittest.TestCase):
+    def scripted_chat(self, first: str):
+        calls = {"n": 0}
+
+        def chat(provider, messages, emit=None, should_cancel=None):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                if emit:
+                    emit(first)
+                return first
+            raise self.second_error
+
+        return chat
+
+    def test_deai_llm_error_carries_draft(self) -> None:
+        self.second_error = llm.LLMError("接口超时")
+        with self.assertRaises(translate.DeaiDraftError) as ctx:
+            translate.translate(SLOP_ZH, PROVIDER, Settings(max_rounds=1),
+                                chat=self.scripted_chat(TRANSLATED))
+        exc = ctx.exception
+        self.assertEqual(exc.draft.rstrip(), TRANSLATED.strip())
+        self.assertIn("接口超时", exc.reason)
+        self.assertEqual((exc.source_lang, exc.target_lang), ("zh", "en"))
+        self.assertFalse(exc.cancelled)
+        # 负向对照：译文本身为空的第一段失败不该带上草稿
+        self.assertFalse(isinstance(exc, llm.Cancelled))
+
+    def test_deai_cancel_carries_draft_and_flag(self) -> None:
+        self.second_error = llm.Cancelled("已停止")
+        with self.assertRaises(translate.DeaiDraftError) as ctx:
+            translate.translate(SLOP_ZH, PROVIDER, Settings(max_rounds=1),
+                                chat=self.scripted_chat(TRANSLATED))
+        exc = ctx.exception
+        self.assertTrue(exc.cancelled)
+        self.assertEqual(exc.draft.rstrip(), TRANSLATED.strip())
+
+    def test_stage1_failure_is_not_a_draft_error(self) -> None:
+        def chat(provider, messages, emit=None, should_cancel=None):
+            raise llm.LLMError("没响应")
+
+        with self.assertRaises(llm.LLMError) as ctx:
+            translate.translate(SLOP_ZH, PROVIDER, Settings(max_rounds=1), chat=chat)
+        self.assertNotIsInstance(ctx.exception, translate.DeaiDraftError)
+
+    def test_deai_stage_resume_keeps_passed_languages(self) -> None:
+        script = Scripted(CLEAN_EN)
+        stages: list[tuple[str, int]] = []
+        result = translate.deai_stage(
+            TRANSLATED, PROVIDER, Settings(max_rounds=1, translate_target="自动"),
+            "zh", "en", chat=script, on_stage=lambda stage, index: stages.append((stage, index)))
+        self.assertEqual(stages, [("deai", 1)])
+        self.assertEqual(result.translated, TRANSLATED)
+        self.assertEqual(result.text, CLEAN_EN.strip())
+        self.assertEqual(result.direction(), "中文→英文")
+        # 目标语言必须用传入的 en；若按英文草稿反推会得到 zh，提示词也就不是英文规则
+        self.assertIn("Template opener", script.calls[0][0]["content"])
+
+    def test_deai_stage_failure_is_plain_llm_error(self) -> None:
+        def chat(provider, messages, emit=None, should_cancel=None):
+            raise llm.LLMError("坏了")
+
+        with self.assertRaises(llm.LLMError) as ctx:
+            translate.deai_stage(TRANSLATED, PROVIDER, Settings(max_rounds=1),
+                                 "zh", "en", chat=chat)
+        self.assertNotIsInstance(ctx.exception, translate.DeaiDraftError)
+
+
 if __name__ == "__main__":
     unittest.main()

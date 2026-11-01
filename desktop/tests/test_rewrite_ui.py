@@ -197,6 +197,8 @@ class TestRewriteHandlers(unittest.TestCase):
         self.win._last_result = None
         self.win._stream_text = ""
         self.win._worker = None
+        self.win._translation_draft = None
+        self.win._translation_resume = None
         self.win._select_tab(0)
         self.win._output_view = 1
         self.win.output_view.select(1, notify=False)
@@ -292,6 +294,60 @@ class TestRewriteHandlers(unittest.TestCase):
         self.assertIn("去 AI 1 轮", self.win.status.text())
         self.assertIn("门禁：通过", self.win.status.text())
 
+    def test_deai_failure_keeps_draft_and_offers_retry(self) -> None:
+        self.win._select_tab(1)
+        self.assertEqual(self.win.rewrite_button.text(), "AI 翻译")
+        self.win._on_translation_deai_failed("接口超时", TRANSLATED, "zh", "en")
+        self.assertEqual(self.win._translation_draft, TRANSLATED)
+        self.assertEqual(self.win._translation_resume, ("zh", "en"))
+        self.assertIsNone(self.win._last_result)
+        self.assertEqual(self.win.output.text(), TRANSLATED)
+        self.assertEqual(self.win.rewrite_button.text(), "重试降 AI")
+        self.assertIn("草稿已保留", self.win.status.text())
+        self.assertIn("接口超时", self.win.status.text())
+
+    def test_deai_cancel_keeps_draft(self) -> None:
+        self.win._select_tab(1)
+        self.win._on_translation_deai_cancelled(TRANSLATED, "zh", "en")
+        self.assertEqual(self.win._translation_draft, TRANSLATED)
+        self.assertEqual(self.win.rewrite_button.text(), "重试降 AI")
+
+    def test_primary_action_dispatches_to_retry_when_draft_pending(self) -> None:
+        self.win._select_tab(1)
+        self.win._translation_draft = TRANSLATED
+        self.win._translation_resume = ("zh", "en")
+        with mock.patch.object(self.win, "start_deai_retry") as retry, \
+                mock.patch.object(self.win, "start_translation") as translated:
+            self.win.start_primary_action()
+            retry.assert_called_once_with()
+            translated.assert_not_called()
+
+    def test_retry_success_clears_draft(self) -> None:
+        self.win._select_tab(1)
+        self.win._translation_draft = TRANSLATED
+        self.win._translation_resume = ("zh", "en")
+        self.win._on_translation_done(translation_result())
+        self.assertIsNone(self.win._translation_draft)
+        self.assertIsNone(self.win._translation_resume)
+        self.assertEqual(self.win._primary_label(), "AI 翻译")
+
+    def test_copy_labels_draft_explicitly(self) -> None:
+        self.win._translation_draft = TRANSLATED
+        self.win._translation_resume = ("zh", "en")
+        self.win._copy()
+        self.assertEqual(QApplication.clipboard().text(), TRANSLATED)
+        self.assertIn("译文草稿（未过降 AI）", self.win.status.text())
+
+    def test_editing_input_voids_pending_draft(self) -> None:
+        self.win._select_tab(1)
+        self.win._translation_draft = TRANSLATED
+        self.win._translation_resume = ("zh", "en")
+        self.win.rewrite_button.setText(self.win._primary_label())
+        self.win.input.set_text("新的输入")
+        self.assertIsNone(self.win._translation_draft)
+        self.assertIsNone(self.win._translation_resume)
+        self.assertEqual(self.win.rewrite_button.text(), "AI 翻译")
+
 
 class TestRewriteWorker(unittest.TestCase):
     @classmethod
@@ -356,6 +412,84 @@ class TestRewriteWorker(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].text, CLEAN_EN.strip())
         self.assertEqual(results[0].direction(), "中文→英文")
+
+    def test_translation_deai_failure_keeps_draft(self) -> None:
+        interrupted, delivered = [], []
+        worker = TranslationWorker(SLOP, PROVIDER, Settings(max_rounds=1))
+        worker.deai_failed.connect(
+            lambda reason, draft, source, target: interrupted.append(
+                (reason, draft, source, target)))
+        worker.failed.connect(delivered.append)
+        worker.done.connect(delivered.append)
+        with mock.patch.object(llm, "stream_chat", side_effect=[TRANSLATED, llm.LLMError("接口超时")]):
+            worker.run()
+        self.qapp.processEvents()
+        self.assertEqual(len(interrupted), 1)
+        reason, draft, source, target = interrupted[0]
+        self.assertIn("接口超时", reason)
+        self.assertEqual(draft.rstrip(), TRANSLATED.strip())
+        self.assertEqual((source, target), ("zh", "en"))
+        self.assertEqual(delivered, [])
+
+    def test_translation_deai_cancel_keeps_draft(self) -> None:
+        drafts, cancelled, done = [], [], []
+        worker = TranslationWorker(SLOP, PROVIDER, Settings(max_rounds=1))
+        worker.deai_cancelled.connect(
+            lambda draft, source, target: drafts.append((draft, source, target)))
+        worker.cancelled.connect(cancelled.append)
+        worker.done.connect(done.append)
+        with mock.patch.object(llm, "stream_chat", side_effect=[TRANSLATED, llm.Cancelled("停")]):
+            worker.run()
+        self.qapp.processEvents()
+        self.assertEqual(len(drafts), 1)
+        draft, source, target = drafts[0]
+        self.assertEqual(draft.rstrip(), TRANSLATED.strip())
+        self.assertEqual((source, target), ("zh", "en"))
+        self.assertEqual(cancelled, [])
+        self.assertEqual(done, [])
+
+    def test_translation_stage1_failure_has_no_draft(self) -> None:
+        interrupted, failed = [], []
+        worker = TranslationWorker(SLOP, PROVIDER, Settings(max_rounds=1))
+        worker.deai_failed.connect(lambda *args: interrupted.append(args))
+        worker.deai_cancelled.connect(lambda *args: interrupted.append(args))
+        worker.failed.connect(failed.append)
+        with mock.patch.object(llm, "stream_chat", side_effect=llm.LLMError("没响应")):
+            worker.run()
+        self.qapp.processEvents()
+        self.assertEqual(interrupted, [])
+        self.assertEqual(failed, ["没响应"])
+
+    def test_translation_resume_only_runs_deai(self) -> None:
+        results, stages = [], []
+        worker = TranslationWorker(TRANSLATED, PROVIDER, Settings(max_rounds=1),
+                                   resume=("zh", "en"))
+        worker.done.connect(results.append)
+        worker.stage_started.connect(lambda stage, index: stages.append((stage, index)))
+        with mock.patch.object(llm, "stream_chat", side_effect=[CLEAN_EN]):
+            worker.run()
+        self.qapp.processEvents()
+        self.assertEqual(stages, [("deai", 1)])
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].text, CLEAN_EN.strip())
+        self.assertEqual(results[0].direction(), "中文→英文")
+
+    def test_translation_resume_failure_keeps_draft(self) -> None:
+        interrupted, delivered = [], []
+        worker = TranslationWorker(TRANSLATED, PROVIDER, Settings(max_rounds=1),
+                                   resume=("zh", "en"))
+        worker.deai_failed.connect(
+            lambda reason, draft, source, target: interrupted.append(
+                (reason, draft, source, target)))
+        worker.failed.connect(delivered.append)
+        with mock.patch.object(llm, "stream_chat", side_effect=llm.LLMError("坏了")):
+            worker.run()
+        self.qapp.processEvents()
+        self.assertEqual(len(interrupted), 1)
+        _, draft, source, target = interrupted[0]
+        self.assertEqual(draft, TRANSLATED)
+        self.assertEqual((source, target), ("zh", "en"))
+        self.assertEqual(delivered, [])
 
 
 if __name__ == "__main__":

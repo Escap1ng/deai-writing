@@ -61,13 +61,17 @@ class TranslationWorker(QThread):
     done = Signal(object)
     failed = Signal(str)
     cancelled = Signal()
+    #: 降 AI 段失败/取消后仍持有译文草稿：(原因, 草稿, 源语言, 目标语言)
+    deai_failed = Signal(str, str, str, str)
+    deai_cancelled = Signal(str, str, str)
 
     def __init__(self, text: str, provider: Provider, settings: Settings,
-                 parent=None) -> None:
+                 parent=None, *, resume: tuple[str, str] | None = None) -> None:
         super().__init__(parent)
         self._text = text
         self._provider = provider
         self._settings = settings
+        self._resume = resume
         self._cancel = threading.Event()
 
     def cancel(self) -> None:
@@ -75,19 +79,43 @@ class TranslationWorker(QThread):
 
     def run(self) -> None:  # noqa: D401 - QThread 入口
         try:
-            result = translator.translate(
-                self._text,
-                self._provider,
-                self._settings,
-                emit=self.delta.emit,
-                should_cancel=self._cancel.is_set,
-                on_stage=self.stage_started.emit,
-                on_round_done=self.round_done.emit,
-            )
+            if self._resume is None:
+                result = translator.translate(
+                    self._text,
+                    self._provider,
+                    self._settings,
+                    emit=self.delta.emit,
+                    should_cancel=self._cancel.is_set,
+                    on_stage=self.stage_started.emit,
+                    on_round_done=self.round_done.emit,
+                )
+            else:
+                result = translator.deai_stage(
+                    self._text,
+                    self._provider,
+                    self._settings,
+                    self._resume[0],
+                    self._resume[1],
+                    emit=self.delta.emit,
+                    should_cancel=self._cancel.is_set,
+                    on_stage=self.stage_started.emit,
+                    on_round_done=self.round_done.emit,
+                )
+        except translator.DeaiDraftError as exc:
+            if exc.cancelled:
+                self.deai_cancelled.emit(exc.draft, exc.source_lang, exc.target_lang)
+            else:
+                self.deai_failed.emit(exc.reason, exc.draft, exc.source_lang, exc.target_lang)
         except llm.Cancelled:
-            self.cancelled.emit()
+            if self._resume is not None:
+                self.deai_cancelled.emit(self._text, self._resume[0], self._resume[1])
+            else:
+                self.cancelled.emit()
         except (llm.LLMError, EngineError, ConfigError) as exc:
-            self.failed.emit(str(exc))
+            if self._resume is not None:
+                self.deai_failed.emit(str(exc), self._text, self._resume[0], self._resume[1])
+            else:
+                self.failed.emit(str(exc))
         except Exception as exc:  # noqa: BLE001 - 线程边界不能把异常吞成静默退出
             self.failed.emit(f"翻译意外中断：{exc}")
         else:

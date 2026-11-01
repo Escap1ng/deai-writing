@@ -53,6 +53,15 @@ class _Handler(BaseHTTPRequestHandler):
         if "学术论文翻译" in system:
             output = TRANSLATED
         elif TRANSLATED.strip() in user:
+            if getattr(self.server, "fail_deai", False):
+                body = b'{"error": {"message": "simulated deai outage"}}'
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                self.wfile.flush()
+                return
             output = CLEAN_EN
         elif has_cjk(user):
             output = CLEAN
@@ -124,13 +133,24 @@ class TestRewriteEndToEnd(unittest.TestCase):
         self.win._last_gate = None
         self.win._last_source = ""
         self.win._worker = None
+        self.win._translation_draft = None
+        self.win._translation_resume = None
         self.win._select_tab(0)
         self.win._output_view = 1
         self.win.output_view.select(1, notify=False)
         self.win.rewrite_button.setText("AI 改写")
         self.win.check_button.setEnabled(True)
         self.win.settings_button.setEnabled(True)
+        self.server.fail_deai = False
         self.qapp.processEvents()
+
+    def _wait_for_worker(self) -> None:
+        deadline = time.monotonic() + 10
+        while self.win._worker is not None and time.monotonic() < deadline:
+            self.qapp.processEvents()
+            time.sleep(0.01)
+        self.qapp.processEvents()
+        self.assertIsNone(self.win._worker, "后台线程未在 10 秒内结束")
 
     def test_button_delivers_streamed_result(self) -> None:
         self.assertEqual(self.win._active_provider.name, "本地假接口")
@@ -160,19 +180,39 @@ class TestRewriteEndToEnd(unittest.TestCase):
         before = self.server.requests
         self.win.start_primary_action()
         self.assertEqual(self.win.rewrite_button.text(), "停止生成")
+        self._wait_for_worker()
 
-        deadline = time.monotonic() + 10
-        while self.win._worker is not None and time.monotonic() < deadline:
-            self.qapp.processEvents()
-            time.sleep(0.01)
-        self.qapp.processEvents()
-
-        self.assertIsNone(self.win._worker, "翻译线程未在 10 秒内结束")
         self.assertEqual(self.server.requests - before, 2, "应为翻译 + 一轮译后去 AI")
         self.assertEqual(self.win._last_result, CLEAN_EN.strip())
         self.assertIn("翻译完成", self.win.status.text())
         self.assertIn("中文→英文", self.win.status.text())
         self.assertIn("门禁：通过", self.win.status.text())
+        self.assertEqual(self.win.rewrite_button.text(), "AI 翻译")
+
+    def test_translation_deai_failure_keeps_draft_then_retry(self) -> None:
+        self.win._select_tab(1)
+        before = self.server.requests
+        self.server.fail_deai = True
+        self.win.start_primary_action()
+        self._wait_for_worker()
+
+        self.assertEqual(self.server.requests - before, 2, "翻译 1 次 + 降 AI 失败 1 次")
+        self.assertIsNone(self.win._last_result, "失败后不得把未过降 AI 的译文当结果")
+        self.assertEqual(self.win._translation_draft.strip(), TRANSLATED.strip())
+        self.assertEqual(self.win._translation_resume, ("zh", "en"))
+        self.assertEqual(self.win.output.text().strip(), TRANSLATED.strip())
+        self.assertEqual(self.win.rewrite_button.text(), "重试降 AI")
+        self.assertIn("草稿已保留", self.win.status.text())
+
+        before_retry = self.server.requests
+        self.server.fail_deai = False
+        self.win.start_primary_action()
+        self._wait_for_worker()
+
+        self.assertEqual(self.server.requests - before_retry, 1, "重试只跑降 AI 一段")
+        self.assertEqual(self.win._last_result, CLEAN_EN.strip())
+        self.assertIsNone(self.win._translation_draft)
+        self.assertIn("翻译完成", self.win.status.text())
         self.assertEqual(self.win.rewrite_button.text(), "AI 翻译")
 
 

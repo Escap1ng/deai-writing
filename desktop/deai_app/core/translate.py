@@ -8,9 +8,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
-from deai_app.bridge import engines
+from deai_app.bridge import EngineError, engines
 from deai_app.core import checkup, llm, pipeline
-from deai_app.core.config import Provider, Settings
+from deai_app.core.config import ConfigError, Provider, Settings
 
 TARGETS = ("自动", "英文", "中文")
 STAGE_TRANSLATE = "translate"
@@ -20,6 +20,19 @@ StageStart = Callable[[str, int], None]
 RoundDone = Callable[[int, pipeline.RoundResult], None]
 
 _LANG_NAME = {"zh": "中文", "en": "英文"}
+
+
+class DeaiDraftError(Exception):
+    """降 AI 阶段中断，保住已生成的译文草稿（未过三关，不作为最终结果）。"""
+
+    def __init__(self, draft: str, reason: str, source_lang: str, target_lang: str,
+                 cancelled: bool = False) -> None:
+        super().__init__(reason)
+        self.draft = draft
+        self.reason = reason
+        self.source_lang = source_lang
+        self.target_lang = target_lang
+        self.cancelled = cancelled
 
 
 @dataclass
@@ -69,6 +82,35 @@ def messages(text: str, source_lang: str, target_lang: str) -> list[dict]:
     ]
 
 
+def deai_stage(
+    draft: str,
+    provider: Provider,
+    settings: Settings,
+    source_lang: str,
+    target_lang: str,
+    *,
+    emit: Callable[[str], None] | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+    on_stage: StageStart | None = None,
+    on_round_done: RoundDone | None = None,
+    chat: pipeline.Chat | None = None,
+) -> TranslationResult:
+    """对已有译文草稿只跑降 AI 段；语言由调用方传入，不从草稿反推。"""
+    call = chat or llm.stream_chat
+    deai = pipeline.rewrite(
+        draft,
+        provider,
+        replace(settings, preset="论文", lang=target_lang),
+        emit=emit,
+        should_cancel=should_cancel,
+        on_round_start=(lambda index: on_stage(STAGE_DEAI, index)) if on_stage else None,
+        on_round_done=on_round_done,
+        chat=call,
+    )
+    return TranslationResult(deai.text, draft, deai.gate, source_lang, target_lang,
+                             deai.rounds)
+
+
 def translate(
     text: str,
     provider: Provider,
@@ -94,18 +136,17 @@ def translate(
         raise llm.LLMError("模型没有返回译文：换一个模型，或把段落拆短再试")
 
     if settings.auto_deai_after_translate:
-        deai = pipeline.rewrite(
-            translated,
-            provider,
-            replace(settings, preset="论文", lang=target_lang),
-            emit=emit,
-            should_cancel=should_cancel,
-            on_round_start=(lambda index: on_stage(STAGE_DEAI, index)) if on_stage else None,
-            on_round_done=on_round_done,
-            chat=call,
-        )
-        return TranslationResult(deai.text, translated, deai.gate, source_lang, target_lang,
-                                 deai.rounds)
+        try:
+            return deai_stage(
+                translated, provider, settings, source_lang, target_lang,
+                emit=emit, should_cancel=should_cancel, on_stage=on_stage,
+                on_round_done=on_round_done, chat=call,
+            )
+        except llm.Cancelled as exc:
+            raise DeaiDraftError(translated, "已取消", source_lang, target_lang,
+                                 cancelled=True) from exc
+        except (llm.LLMError, EngineError, ConfigError) as exc:
+            raise DeaiDraftError(translated, str(exc), source_lang, target_lang) from exc
 
     gate = checkup.run(translated, target_lang)
     return TranslationResult(translated, translated, gate, source_lang, target_lang, [])

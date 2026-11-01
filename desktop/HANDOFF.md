@@ -2,7 +2,8 @@
 
 ## 当前状态
 
-- M0–M5 已完成：PySide6 无边框外壳、三关体检、改写闭环、学术翻译、目录版与单文件版 exe。
+- M0–M5 已完成：PySide6 无边框外壳、三关体检、改写闭环、学术翻译、目录版与单文件版 exe；
+  译后降 AI 失败已可保留译文草稿并整段重试（2026-10-30 补）。
 - 目录版已构建并验证：`desktop/build/dist/deai/deai.exe`，整个目录约 94 MB；
   exe 自检 5/5 通过，窗口能启动、加载样本并正常退出。
 - 单文件版已构建并验证：`desktop/build/dist/deai.exe`，38,544,607 字节（约 37 MB）；
@@ -60,8 +61,8 @@ python3 build/build.py --onefile        # 单文件版：build/dist/deai.exe，�
    核对 401/404/429/超时的文案、流式增量与取消。
 2. **长文策略**：当前把全文直接放进提示词；超过上下文会由供应商报错，
    需要分段、截断或提示用户拆稿。
-3. **译后去 AI 失败的回退**：两阶段切换时会清空翻译稿，第二段失败只剩错误提示；
-   目标是不交付未去 AI 的译文，但可以保留译文草稿供重试。
+3. **译后去 AI 失败的回退**：已实现——失败与取消都保留草稿，重试只重跑降 AI 段；
+   尚未用真实供应商验证，联调时留意。
 4. 可选：应用图标、代码签名、安装器、单文件版杀软误报实测、
    依赖体积裁剪（排除项已在 `bundle.py`）。
 
@@ -78,7 +79,12 @@ python3 build/build.py --onefile        # 单文件版：build/dist/deai.exe，�
 
 ## 本轮改动清单
 
-- 构建单文件版并按上面三项验证：`--smoke` 三次、窗口启动与 WM_CLOSE 退出。
-- `desktop/README.md`：打包一节补单文件版命令、体积、启动耗时与自检结果。
-- `desktop/HANDOFF.md`：状态与后续优先级同步到单文件版已验证。
-- 构建产物在 `desktop/build/dist/`，已被忽略，不随仓库提交。
+- `desktop/deai_app/core/translate.py`：降 AI 段抽成 `deai_stage()`；失败/取消抛 `DeaiDraftError`
+  （草稿、原因、方向语言、是否取消）。
+- `desktop/deai_app/ui/rewrite.py`：`TranslationWorker` 加 `resume` 只跑降 AI 段；
+  新增 `deai_failed` / `deai_cancelled` 信号，草稿只在 translation 流里回收。
+- `desktop/deai_app/ui/app.py`：失败/取消后保留草稿、界面标注「未过降 AI」；
+  主按钮变「重试降 AI」，复制/保存的草稿口径显式标注；改动输入作废待重试草稿。
+- 测试：`test_translate.py`（异常携带草稿、resume 用传入语言）、`test_rewrite_ui.py`
+  （信号映射、状态机、复制口径）、`test_rewrite_e2e.py`（失败保留草稿 → 重试交付全文）。
+- 桌面端门禁 223 项；引擎自检 12/12。

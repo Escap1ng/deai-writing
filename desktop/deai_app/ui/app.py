@@ -233,12 +233,15 @@ class DeaiApp(QWidget):
         self._last_result: str | None = None
         self._stream_text = ""
         self._worker: RewriteWorker | None = None
+        self._translation_draft: str | None = None
+        self._translation_resume: tuple[str, str] | None = None
         self._providers: list[config.Provider] = []
         self._settings = config.Settings()
         self._active_provider: config.Provider | None = None
         self.input.set_placeholder(INPUT_PLACEHOLDER)
         self.output.set_placeholder(OUTPUT_PLACEHOLDER)
         self.input.refresh_meta()
+        self.input.edit.textChanged.connect(self._on_input_changed)
         self._reload_config()
         for sequence, handler in (
             ("Ctrl+Return", self.start_primary_action), ("Ctrl+Shift+Return", self.run_check),
@@ -290,10 +293,14 @@ class DeaiApp(QWidget):
             return None
 
     def _primary_label(self) -> str:
+        if self._mode == 1 and self._translation_draft is not None:
+            return "重试降 AI"
         return "AI 翻译" if self._mode == 1 else "AI 改写"
 
     def _primary_hint(self) -> str:
         if self._mode == 1:
+            if self._translation_draft is not None:
+                return "继续上次的译文草稿：只重跑降 AI（Ctrl+Enter）"
             return "学术翻译，译文默认再过降 AI（Ctrl+Enter）"
         return "调用已配置的模型改写，并在每轮后跑本地三关（Ctrl+Enter）"
 
@@ -309,7 +316,10 @@ class DeaiApp(QWidget):
             self._say("正在停止生成……")
             return
         if self._mode == 1:
-            self.start_translation()
+            if self._translation_draft is not None:
+                self.start_deai_retry()
+            else:
+                self.start_translation()
         else:
             self.start_rewrite()
 
@@ -335,11 +345,12 @@ class DeaiApp(QWidget):
         else:
             self.status.setText(self._idle_status())
 
-    def _prepare_generation(self, text: str) -> bool:
+    def _prepare_generation(self, text: str, *, gate_input: bool = True) -> bool:
         local = self._local_check(text)
         if local is None:
             return False
-        self.input.set_gate(len(local.phrasing), local.style_risk, local.invisible_total)
+        if gate_input:
+            self.input.set_gate(len(local.phrasing), local.style_risk, local.invisible_total)
         self._last_gate = None
         self._last_source = ""
         self._last_result = None
@@ -397,18 +408,55 @@ class DeaiApp(QWidget):
             return
         if not self._prepare_generation(text):
             return
+        self._translation_draft = None
+        self._translation_resume = None
 
         self._worker = TranslationWorker(text, self._active_provider, self._settings, self)
         self._worker.stage_started.connect(self._on_translation_stage)
         self._worker.delta.connect(self._on_delta)
         self._worker.round_done.connect(self._on_round_done)
         self._worker.done.connect(self._on_translation_done)
+        self._worker.deai_failed.connect(self._on_translation_deai_failed)
+        self._worker.deai_cancelled.connect(self._on_translation_deai_cancelled)
         self._worker.failed.connect(self._on_rewrite_failed)
         self._worker.cancelled.connect(self._on_rewrite_cancelled)
         self._worker.finished.connect(self._on_worker_finished)
         self._worker.start()
         self._say(f"翻译中 · {self._direction_label()} · {self._active_provider.name}"
                   f" · {self._active_provider.model}")
+
+    def start_deai_retry(self) -> None:
+        draft = self._translation_draft
+        resume = self._translation_resume
+        if draft is None or resume is None:
+            self.start_translation()
+            return
+        if not draft.strip():
+            self._translation_draft = None
+            self._translation_resume = None
+            self.rewrite_button.setText(self._primary_label())
+            self.start_translation()
+            return
+        error = self._provider_error(self._active_provider)
+        if error:
+            self._open_settings(f"先配置接口：{error}")
+            return
+        if not self._prepare_generation(draft, gate_input=False):
+            return
+
+        self._worker = TranslationWorker(draft, self._active_provider, self._settings, self,
+                                         resume=resume)
+        self._worker.stage_started.connect(self._on_translation_stage)
+        self._worker.delta.connect(self._on_delta)
+        self._worker.round_done.connect(self._on_round_done)
+        self._worker.done.connect(self._on_translation_done)
+        self._worker.deai_failed.connect(self._on_translation_deai_failed)
+        self._worker.deai_cancelled.connect(self._on_translation_deai_cancelled)
+        self._worker.failed.connect(self._on_rewrite_failed)
+        self._worker.cancelled.connect(self._on_rewrite_cancelled)
+        self._worker.finished.connect(self._on_worker_finished)
+        self._worker.start()
+        self._say(f"重试降 AI · {self._active_provider.name} · {self._active_provider.model}")
 
     def _on_translation_stage(self, stage: str, index: int) -> None:
         self.output.set_text("")
@@ -419,6 +467,8 @@ class DeaiApp(QWidget):
             self._say(f"译文已生成 · 去 AI 第 {index} 轮")
 
     def _on_translation_done(self, result) -> None:
+        self._translation_draft = None
+        self._translation_resume = None
         self._last_gate = result.gate
         self._last_source = result.text
         self._last_result = result.text
@@ -432,6 +482,38 @@ class DeaiApp(QWidget):
         self._say(f"翻译完成 · {result.direction()}{rounds} · "
                   f"词表 {len(result.gate.phrasing)} 处 · 结构 {result.gate.style_risk}"
                   f" · 门禁：{verdict}")
+
+    def _on_translation_deai_failed(self, reason: str, draft: str,
+                                    source_lang: str, target_lang: str) -> None:
+        self._keep_translation_draft(draft, source_lang, target_lang)
+        self.output.set_metrics("—", "—", "草稿")
+        self._say(f"译文未过降 AI：{reason} · 草稿已保留，点「重试降 AI」继续")
+
+    def _on_translation_deai_cancelled(self, draft: str,
+                                       source_lang: str, target_lang: str) -> None:
+        self._keep_translation_draft(draft, source_lang, target_lang)
+        self.output.set_metrics("—", "—", "已停止")
+        self._say("已停止降 AI：译文草稿已保留，点「重试降 AI」继续")
+
+    def _keep_translation_draft(self, draft: str, source_lang: str, target_lang: str) -> None:
+        self._translation_draft = draft
+        self._translation_resume = (source_lang, target_lang)
+        self._last_gate = None
+        self._last_source = ""
+        self._last_result = None
+        self._stream_text = ""
+        self.output.set_text(draft)
+        self.rewrite_button.setText(self._primary_label())
+        self.rewrite_button.setToolTip(self._primary_hint())
+
+    def _on_input_changed(self) -> None:
+        if self._translation_draft is None or self._worker is not None:
+            return
+        self._translation_draft = None
+        self._translation_resume = None
+        self.rewrite_button.setText(self._primary_label())
+        self.rewrite_button.setToolTip(self._primary_hint())
+        self._say("输入已改动，上次的译文草稿作废")
 
     def _on_round_start(self, index: int) -> None:
         if index > 1:
@@ -532,6 +614,9 @@ class DeaiApp(QWidget):
         if self._last_result is not None:
             payload = self._last_result
             label = "改写结果"
+        elif self._translation_draft is not None and self._translation_draft.strip():
+            payload = self._translation_draft
+            label = "译文草稿（未过降 AI）"
         else:
             payload = self.output.text()
             label = "输出"
@@ -544,6 +629,8 @@ class DeaiApp(QWidget):
     def _save(self) -> None:
         if self._last_result is not None:
             payload, title, default = self._last_result, "保存改写结果", "降AI改写.md"
+        elif self._translation_draft is not None and self._translation_draft.strip():
+            payload, title, default = self._translation_draft, "保存译文草稿", "降AI译文草稿.md"
         else:
             payload, title, default = self.output.text(), "保存体检报告", "降AI体检.md"
         if not payload.strip():
