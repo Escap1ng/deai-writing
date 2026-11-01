@@ -5,9 +5,10 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
-from deai_app.core import checkup, llm, translate
+from deai_app.core import checkup, limits, llm, prompt, translate
 from deai_app.core.config import Provider, Settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -184,6 +185,44 @@ class TestDeaiDraftFlow(unittest.TestCase):
             translate.deai_stage(TRANSLATED, PROVIDER, Settings(max_rounds=1),
                                  "zh", "en", chat=chat)
         self.assertNotIsInstance(ctx.exception, translate.DeaiDraftError)
+
+
+class TestLengthGuard(unittest.TestCase):
+    LONG_EN = ("It is worth noting that the transformation significantly reshaped the "
+               "reporting landscape. " * 48)
+
+    def test_stage1_refuses_before_any_call(self) -> None:
+        used = limits.estimate_messages(translate.messages(SLOP_ZH, "zh", "en"))
+        tight = replace(PROVIDER, context_tokens=PROVIDER.max_tokens + max(16, used))
+
+        def chat(provider, messages, emit=None, should_cancel=None):
+            raise AssertionError("超限后不应发出任何请求")
+
+        with self.assertRaises(llm.LLMError) as ctx:
+            translate.translate(SLOP_ZH, tight, Settings(), chat=chat)
+        self.assertIn("还没发出", str(ctx.exception))
+
+    def test_deai_preflight_failure_keeps_draft(self) -> None:
+        # 上下文放得下第一段翻译，但放不下降 AI 段的第一轮
+        stage1 = limits.estimate_messages(translate.messages(SLOP_ZH, "zh", "en"))
+        deai = limits.estimate_messages(prompt.messages(self.LONG_EN, "en", "论文", "中", None))
+        tight = replace(PROVIDER, context_tokens=PROVIDER.max_tokens + deai)
+        script = Scripted(self.LONG_EN)
+        with self.assertRaises(translate.DeaiDraftError) as ctx:
+            translate.translate(SLOP_ZH, tight, Settings(max_rounds=1), chat=script)
+        exc = ctx.exception
+        self.assertEqual(len(script.calls), 1, "译文段子在发请求前就应被拦下")
+        self.assertEqual(exc.draft.strip(), self.LONG_EN.strip())
+        self.assertIn("还没发出", exc.reason)
+
+    def test_roomy_budget_translates_and_deais(self) -> None:
+        stage1 = limits.estimate_messages(translate.messages(SLOP_ZH, "zh", "en"))
+        deai = limits.estimate_messages(prompt.messages(self.LONG_EN, "en", "论文", "中", None))
+        roomy = replace(PROVIDER, context_tokens=PROVIDER.max_tokens + int(deai / 0.75) + 64)
+        script = Scripted(self.LONG_EN, CLEAN_EN)
+        result = translate.translate(SLOP_ZH, roomy, Settings(max_rounds=1), chat=script)
+        self.assertEqual(len(script.calls), 2)
+        self.assertEqual(result.gate.lang, "en")
 
 
 if __name__ == "__main__":

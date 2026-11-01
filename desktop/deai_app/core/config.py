@@ -50,6 +50,8 @@ class Provider:
     temperature: float = 0.3
     max_tokens: int = 4096
     timeout: int = 120
+    #: 模型总上下文 tokens；0 = 不填就不启用发前长文检查
+    context_tokens: int = 0
 
     def endpoint(self) -> str:
         base = self.base_url.rstrip("/")
@@ -67,6 +69,8 @@ class Provider:
             raise ConfigError(f"{self.name}：model 不能为空")
         if not self.api_key and not _is_local(self.base_url):
             raise ConfigError(f"{self.name}：没有 api_key，本地服务除外")
+        if self.context_tokens < 0:
+            raise ConfigError(f"{self.name}：context_tokens 不能小于 0")
 
     def masked(self) -> dict:
         data = asdict(self)
@@ -178,6 +182,7 @@ def load_providers(directory: Path | None = None) -> list[Provider]:
                 temperature=_number(item, "temperature", float, 0.3, name),
                 max_tokens=_number(item, "max_tokens", int, 4096, name),
                 timeout=_number(item, "timeout", int, 120, name),
+                context_tokens=_number(item, "context_tokens", int, 0, name),
             )
         )
     return providers

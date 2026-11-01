@@ -163,11 +163,22 @@ class TestSettingsDialog(SettingsCase):
         limit = dialog.width() - 14
         for widget in (dialog.combo, dialog.name_edit, dialog.base_edit,
                        dialog.model_edit, dialog.preset, dialog.intensity,
-                       dialog.target, dialog.rounds):
+                       dialog.target, dialog.rounds, dialog.temp, dialog.timeout,
+                       dialog.context):
             with self.subTest(widget=widget.objectName() or type(widget).__name__):
                 right = widget.mapTo(dialog, widget.rect().topLeft()).x() + widget.width()
                 self.assertLessEqual(right, limit)
         dialog.close()
+
+    def test_context_tokens_round_trip(self) -> None:
+        dialog = self.dialog("本地")
+        self.assertEqual(dialog.context.value(), 0)
+        dialog.context.setValue(32768)
+        dialog._save()
+        saved = config.load_providers(self.dir)
+        self.assertEqual(saved[1].context_tokens, 32768)
+        settings = dialog.settings_out
+        self.assertIsNotNone(settings)
 
 
 class TestRewriteHandlers(unittest.TestCase):

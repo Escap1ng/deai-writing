@@ -148,15 +148,21 @@ class SettingsDialog(QDialog):
         self.temp.setValue(0.3)
         self.timeout = QSpinBox(); self.timeout.setRange(10, 600)
         self.timeout.setValue(120); self.timeout.setSuffix(" 秒")
-        limits = QWidget(); limits_layout = QHBoxLayout(limits)
+        limits_row = QWidget(); limits_layout = QHBoxLayout(limits_row)
         limits_layout.setContentsMargins(0, 0, 0, 0); limits_layout.setSpacing(8)
         limits_layout.addWidget(self.temp, 1); limits_layout.addWidget(self.timeout, 1)
+        self.context = QSpinBox(); self.context.setRange(0, 2_000_000)
+        self.context.setSingleStep(1024)
+        self.context.setSpecialValueText("不限制")
+        self.context.setToolTip("填模型的总上下文 tokens 后，超长输入会在发出前被拦下，"
+                                "提示拆稿；不填则不做这项检查")
 
         self._add_row(form, "名称", self.name_edit)
         self._add_row(form, "接口地址", self.base_edit)
         self._add_row(form, "模型", self.model_edit)
         self._add_row(form, "密钥", key_row)
-        self._add_row(form, "温度与超时", limits)
+        self._add_row(form, "温度与超时", limits_row)
+        self._add_row(form, "上下文 tokens", self.context)
 
         hint = QLabel("密钥只写入本机配置目录的 providers.json")
         hint.setObjectName("hint"); hint.setWordWrap(True)
@@ -215,6 +221,7 @@ class SettingsDialog(QDialog):
         self.key_edit.setText(provider.api_key)
         self.temp.setValue(provider.temperature)
         self.timeout.setValue(provider.timeout)
+        self.context.setValue(provider.context_tokens)
         self.key_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.key_toggle.setText("显示")
         self.error.hide()
@@ -233,6 +240,7 @@ class SettingsDialog(QDialog):
             api_key=self.key_edit.text().strip(),
             temperature=round(self.temp.value(), 1),
             timeout=int(self.timeout.value()),
+            context_tokens=int(self.context.value()),
         )
         self.combo.blockSignals(True)
         self.combo.setItemText(index, name)

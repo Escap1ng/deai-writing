@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from deai_app.bridge import engines
-from deai_app.core import checkup, llm, prompt
+from deai_app.core import checkup, limits, llm, prompt
 from deai_app.core.config import Provider, Settings
 
 Emit = Callable[[str], None]
@@ -63,6 +63,8 @@ def rewrite(
 ) -> RewriteResult:
     call = chat or llm.stream_chat
     lang = settings.lang if settings.lang in ("zh", "en") else checkup.detect_lang(text)
+    limits.check_fit(prompt.messages(text, lang, settings.preset, settings.intensity, None),
+                     provider)
     rounds: list[RoundResult] = []
     current = text
     gate: checkup.GateReport | None = None

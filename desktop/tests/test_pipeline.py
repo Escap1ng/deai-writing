@@ -6,8 +6,9 @@ SSE 的真实分帧已由 test_llm_sse 对着本地服务覆盖；这里只验�
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 
-from deai_app.core import checkup, llm, pipeline
+from deai_app.core import checkup, limits, llm, pipeline, prompt
 from deai_app.core.config import Provider, Settings
 
 CLEAN = "误差从 4.8% 降到 1.9%，来自 3 个班级共 120 份卷面复核。\n"
@@ -98,6 +99,34 @@ class TestRewriteLoop(unittest.TestCase):
         pipeline.rewrite("Some text.", PROVIDER, Settings(lang="en", max_rounds=1), chat=script)
         system = script.calls[0]["messages"][0]["content"]
         self.assertIn("Template opener", system)
+
+
+class TestLengthGuard(unittest.TestCase):
+    def test_refuses_before_any_call_when_too_long(self) -> None:
+        used = limits.estimate_messages(prompt.messages(SLOP, "zh", "论文", "中", None))
+        tight = replace(PROVIDER, context_tokens=PROVIDER.max_tokens + max(16, used))
+
+        def chat(*args, **kwargs) -> str:
+            raise AssertionError("超限后不应发出任何请求")
+
+        with self.assertRaises(llm.LLMError) as ctx:
+            pipeline.rewrite(SLOP, tight, SETTINGS, chat=chat)
+        message = str(ctx.exception)
+        self.assertIn("还没发出", message)
+        self.assertIn("拆", message)
+        self.assertIn("测试", message)
+
+    def test_roomy_budget_still_runs(self) -> None:
+        used = limits.estimate_messages(prompt.messages(SLOP, "zh", "论文", "中", None))
+        roomy = replace(PROVIDER, context_tokens=PROVIDER.max_tokens + int(used / 0.75))
+        script = Scripted(CLEAN)
+        pipeline.rewrite(SLOP, roomy, SETTINGS, chat=script)
+        self.assertEqual(len(script.calls), 1)
+
+    def test_default_provider_has_no_guard(self) -> None:
+        script = Scripted(CLEAN)
+        pipeline.rewrite(SLOP, PROVIDER, SETTINGS, chat=script)
+        self.assertEqual(len(script.calls), 1)
 
 
 class TestStripFence(unittest.TestCase):

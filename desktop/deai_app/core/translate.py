@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 from deai_app.bridge import EngineError, engines
-from deai_app.core import checkup, llm, pipeline
+from deai_app.core import checkup, limits, llm, pipeline
 from deai_app.core.config import ConfigError, Provider, Settings
 
 TARGETS = ("自动", "英文", "中文")
@@ -127,8 +127,9 @@ def translate(
     target_lang = resolve_target(source_lang, settings.translate_target)
     if on_stage:
         on_stage(STAGE_TRANSLATE, 0)
-    raw = call(provider, messages(text, source_lang, target_lang),
-               emit=emit, should_cancel=should_cancel)
+    first = messages(text, source_lang, target_lang)
+    limits.check_fit(first, provider)
+    raw = call(provider, first, emit=emit, should_cancel=should_cancel)
     if should_cancel and should_cancel():
         raise llm.Cancelled("已取消")
     translated = engines.invisible_clean(pipeline.strip_fence(raw))[0]

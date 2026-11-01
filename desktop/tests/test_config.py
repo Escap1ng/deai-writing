@@ -9,6 +9,7 @@ import json
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -112,6 +113,15 @@ class TestProvider(unittest.TestCase):
             with self.subTest(url=url):
                 self.assertFalse(provider(base_url=url).is_local())
 
+    def test_context_tokens_default_is_zero(self) -> None:
+        self.assertEqual(provider().context_tokens, 0)
+
+    def test_negative_context_tokens_is_rejected(self) -> None:
+        broken = replace(provider(), context_tokens=-16)
+        with self.assertRaises(ConfigError) as ctx:
+            broken.validate()
+        self.assertIn("context_tokens", str(ctx.exception))
+
     def test_masked_never_contains_secret(self) -> None:
         data = provider().masked()
         self.assertNotIn(SECRET, json.dumps(data, ensure_ascii=False))
@@ -138,7 +148,16 @@ class TestProvidersFile(unittest.TestCase):
         self.assertEqual([p.name for p in providers], ["甲", "m-b"])
         self.assertEqual(providers[0].temperature, 0.3)
         self.assertEqual(providers[0].max_tokens, 4096)
+        self.assertEqual(providers[0].context_tokens, 0)
         self.assertEqual(providers[1].temperature, 0.7)
+
+    def test_context_tokens_roundtrip(self) -> None:
+        self.write([{"name": "长文档", "base_url": "https://c.example/v1", "model": "m",
+                     "context_tokens": 131072}])
+        loaded = config.load_providers(self.dir)
+        self.assertEqual(loaded[0].context_tokens, 131072)
+        config.save_providers(loaded, self.dir)
+        self.assertEqual(config.load_providers(self.dir), loaded)
 
     def test_dict_payload(self) -> None:
         self.write({"providers": [{"name": "乙", "base_url": "https://b.example/v1",

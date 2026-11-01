@@ -3,14 +3,14 @@
 ## 当前状态
 
 - M0–M5 已完成：PySide6 无边框外壳、三关体检、改写闭环、学术翻译、目录版与单文件版 exe；
-  译后降 AI 失败已可保留译文草稿并整段重试（2026-10-30 补）。
+  译后降 AI 失败已可保留译文草稿并整段重试，超长输入有了按供应商上下文的前置拦截（2026-10-30 补）。
 - 目录版已构建并验证：`desktop/build/dist/deai/deai.exe`，整个目录约 94 MB；
   exe 自检 5/5 通过，窗口能启动、加载样本并正常退出。
 - 单文件版已构建并验证：`desktop/build/dist/deai.exe`，38,544,607 字节（约 37 MB）；
   三次 `--smoke` 均 5/5、退出码 0，启动到自检完成 1.4–1.8 秒；
   窗口 1.4 秒出现，WM_CLOSE 后退出码 0。杀软误报尚未实测。
 - 没有用真实供应商密钥联调过。
-- 门禁：桌面端 206 项测试通过；引擎自检 12/12。
+- 门禁：桌面端 242 项测试通过；引擎自检 12/12。
 
 ## 运行、自检与门禁
 
@@ -59,8 +59,8 @@ python3 build/build.py --onefile        # 单文件版：build/dist/deai.exe，�
 
 1. **真实供应商联调**：至少用一家远程供应商填 key，跑改写与中译英，
    核对 401/404/429/超时的文案、流式增量与取消。
-2. **长文策略**：当前把全文直接放进提示词；超过上下文会由供应商报错，
-   需要分段、截断或提示用户拆稿。
+2. **长文策略**：第一层已做——供应商可填 `context_tokens`，开跑前按字数估算并前置拒绝
+   （`core/limits.py`）；分段、截断或按章节拆稿的策略仍未设计，属于后续。
 3. **译后去 AI 失败的回退**：已实现——失败与取消都保留草稿，重试只重跑降 AI 段；
    尚未用真实供应商验证，联调时留意。
 4. 可选：应用图标、代码签名、安装器、单文件版杀软误报实测、
@@ -79,12 +79,13 @@ python3 build/build.py --onefile        # 单文件版：build/dist/deai.exe，�
 
 ## 本轮改动清单
 
-- `desktop/deai_app/core/translate.py`：降 AI 段抽成 `deai_stage()`；失败/取消抛 `DeaiDraftError`
-  （草稿、原因、方向语言、是否取消）。
-- `desktop/deai_app/ui/rewrite.py`：`TranslationWorker` 加 `resume` 只跑降 AI 段；
-  新增 `deai_failed` / `deai_cancelled` 信号，草稿只在 translation 流里回收。
-- `desktop/deai_app/ui/app.py`：失败/取消后保留草稿、界面标注「未过降 AI」；
-  主按钮变「重试降 AI」，复制/保存的草稿口径显式标注；改动输入作废待重试草稿。
-- 测试：`test_translate.py`（异常携带草稿、resume 用传入语言）、`test_rewrite_ui.py`
-  （信号映射、状态机、复制口径）、`test_rewrite_e2e.py`（失败保留草稿 → 重试交付全文）。
-- 桌面端门禁 223 项；引擎自检 12/12。
+- `desktop/deai_app/core/limits.py`：tokens 估算（CJK 1.6/字、其余 4 字/token，偏保守）
+  与 `check_fit()` 前置拦截；超过预算抛 `llm.LLMError`，文案提示拆稿。
+- `desktop/deai_app/core/config.py`：`Provider.context_tokens`（默认 0 = 不启用）；负值被 validate 拒。
+- `desktop/deai_app/core/pipeline.py`、`translate.py`：第 0 轮发出前先过 `check_fit`
+  （改写的第一轮与翻译首段，译后降 AI 段由 pipeline 自查）；译后段被拦时仍走 DeaiDraftError 保草稿。
+- `desktop/deai_app/ui/settings.py`：供应商表单加「上下文 tokens」（0 显「不限制」，步进 1024）。
+- 测试：`test_limits.py`（估算公式、启停与边界）、`test_pipeline.py`/`test_translate.py`
+  （拦下时不发请求、宽松预算照常跑、译后段被拦仍保草稿）、`test_config.py`（默认值与保存往返）、
+  `test_rewrite_ui.py`（设置界面字段往返与占宽）。
+- 桌面端门禁 242 项；引擎自检 12/12。
