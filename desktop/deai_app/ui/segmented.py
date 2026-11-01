@@ -97,7 +97,7 @@ class SegmentedControl(QWidget):
         return max(0, min(int((x - self.inset) / width), len(self.items) - 1)) if width else 0
 
     def mousePressEvent(self, event) -> None:  # noqa: N802 - Qt 命名
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton and self.isEnabled():
             self.setFocus(Qt.FocusReason.MouseFocusReason)
             self.select(self._index_at(int(event.position().x())))
 
@@ -125,7 +125,10 @@ class SegmentedControl(QWidget):
         super().focusOutEvent(event)
         self.update()
 
-    def keyPressEvent(self, event) -> None:  # noqa: N802
+    def keyPressEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        if not self.isEnabled():
+            super().keyPressEvent(event)
+            return
         key = event.key()
         if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):
             self.select(self._index + (-1 if key == Qt.Key.Key_Left else 1))

@@ -5,9 +5,10 @@
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
+from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import QEvent, QUrl, Qt
 from PySide6.QtGui import QTextBlockFormat, QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
@@ -27,14 +28,31 @@ GATE_LABELS = ("词表", "结构", "字符")
 RISK_COLOR = {"低": "gate_pass", "中": "gate_warn", "高": "gate_block", "极高": "gate_block"}
 
 
+def first_loadable_url(urls: list[QUrl], suffixes: Collection[str]) -> Path | None:
+    """从拖入的 URL 里挑第一个后缀可读的本地文件；没有就返回 None。"""
+    for url in urls:
+        if not url.isLocalFile():
+            continue
+        path = Path(url.toLocalFile())
+        if path.suffix.lower() in suffixes:
+            return path
+    return None
+
+
 class Pane(QFrame):
     def __init__(self, title: str, theme: Theme, *, readonly: bool = False,
                  actions: Sequence[tuple[str, Callable[[], None]]] = (), band: str = "chips",
-                 header_extra: QWidget | None = None) -> None:
+                 header_extra: QWidget | None = None,
+                 drop_suffixes: Collection[str] | None = None,
+                 on_drop: Callable[[Path], None] | None = None) -> None:
         super().__init__()
         self.theme = theme
         self.setObjectName("pane")
         self._band_mode = band
+        self._drop_suffixes = drop_suffixes
+        self._on_drop = on_drop
+        if drop_suffixes is not None:
+            self.setAcceptDrops(True)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(int(theme.shell("content_padding")), 12,
                                  int(theme.shell("content_padding")), 0)
@@ -50,9 +68,11 @@ class Pane(QFrame):
             head.addWidget(header_extra)
         head.addStretch()
         self.meta = QLabel(""); self.meta.setObjectName("meta"); head.addWidget(self.meta)
+        self._action_buttons: list[QPushButton] = []
         for name, callback in actions:
             button = QPushButton(name); button.setObjectName("text"); button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(callback); head.addWidget(button)
+            self._action_buttons.append(button)
         head_widget = QWidget(); head_widget.setFixedHeight(int(theme.shell("pane_header_height")))
         head_widget.setLayout(head); head_widget.setStyleSheet("background: transparent;")
         outer.addWidget(head_widget)
@@ -83,6 +103,48 @@ class Pane(QFrame):
                         bar, "value", bar.value(), target, motion.FAST_MS)
                 return True
         return super().eventFilter(watched, event)
+
+    # ---------- 拖放载入 ----------
+
+    def _set_drag_over(self, value: bool) -> None:
+        if self.property("dragOver") == value:
+            return
+        self.setProperty("dragOver", value)
+        self.style().unpolish(self)
+        self.style().polish(self)
+
+    def _drop_target(self, event) -> Path | None:
+        """事件可接受返回目标文件（顺带打高亮），否则 None。"""
+        suffixes = self._drop_suffixes
+        if suffixes is None or self._on_drop is None or not event.mimeData().hasUrls():
+            return None
+        return first_loadable_url(event.mimeData().urls(), suffixes)
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        if self._drop_target(event) is not None:
+            event.acceptProposedAction()
+            self._set_drag_over(True)
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        if self._drop_target(event) is not None:
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dragLeaveEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        self._set_drag_over(False)
+        super().dragLeaveEvent(event)
+
+    def dropEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        target = self._drop_target(event)
+        self._set_drag_over(False)
+        if target is None:
+            super().dropEvent(event)
+            return
+        event.acceptProposedAction()
+        self._on_drop(target)
 
     # ---------- 底部带 ----------
 
@@ -135,6 +197,10 @@ class Pane(QFrame):
                 self.metrics, (hits, risk, verdict), ("text", RISK_COLOR.get(risk, "text_muted"), colors.get(verdict, "text_muted"))):
             number.setText(str(value))
             number.setStyleSheet(f"color: {self.theme.color(color_key)};")
+
+    def set_actions_enabled(self, enabled: bool) -> None:
+        for button in self._action_buttons:
+            button.setEnabled(enabled)
 
     # ---------- 文本 ----------
 

@@ -4,13 +4,16 @@
 
 - M0–M5 已完成：PySide6 无边框外壳、三关体检、改写闭环、学术翻译、目录版与单文件版 exe；
   译后降 AI 失败已可保留译文草稿并整段重试，超长输入有了按供应商上下文的前置拦截（2026-10-30 补）。
+- 界面使用优化已接通（2026-11-01 补）：失败与指引长文案进可换行提示条（状态行留摘要）、
+  供应商切换与翻译方向前置到主界面、输入栏支持拖放载入、窗口几何记忆、
+  生成期间动作按钮禁用并显示脉冲点。
 - 目录版已构建并验证：`desktop/build/dist/deai/deai.exe`，整个目录约 94 MB；
   exe 自检 5/5 通过，窗口能启动、加载样本并正常退出。
 - 单文件版已构建并验证：`desktop/build/dist/deai.exe`，38,544,607 字节（约 37 MB）；
   三次 `--smoke` 均 5/5、退出码 0，启动到自检完成 1.4–1.8 秒；
-  窗口 1.4 秒出现，WM_CLOSE 后退出码 0。杀软误报尚未实测。
+  窗口 1.4 秒出现，WM_CLOSE 后退出码 0。杀软误报尚未实测。exe 里还没有 11-01 的界面优化。
 - 没有用真实供应商密钥联调过。
-- 门禁：桌面端 242 项测试通过；引擎自检 12/12。
+- 门禁：桌面端 266 项测试通过；引擎自检 12/12。
 
 ## 运行、自检与门禁
 
@@ -79,13 +82,16 @@ python3 build/build.py --onefile        # 单文件版：build/dist/deai.exe，�
 
 ## 本轮改动清单
 
-- `desktop/deai_app/core/limits.py`：tokens 估算（CJK 1.6/字、其余 4 字/token，偏保守）
-  与 `check_fit()` 前置拦截；超过预算抛 `llm.LLMError`，文案提示拆稿。
-- `desktop/deai_app/core/config.py`：`Provider.context_tokens`（默认 0 = 不启用）；负值被 validate 拒。
-- `desktop/deai_app/core/pipeline.py`、`translate.py`：第 0 轮发出前先过 `check_fit`
-  （改写的第一轮与翻译首段，译后降 AI 段由 pipeline 自查）；译后段被拦时仍走 DeaiDraftError 保草稿。
-- `desktop/deai_app/ui/settings.py`：供应商表单加「上下文 tokens」（0 显「不限制」，步进 1024）。
-- 测试：`test_limits.py`（估算公式、启停与边界）、`test_pipeline.py`/`test_translate.py`
-  （拦下时不发请求、宽松预算照常跑、译后段被拦仍保草稿）、`test_config.py`（默认值与保存往返）、
-  `test_rewrite_ui.py`（设置界面字段往返与占宽）。
-- 桌面端门禁 242 项；引擎自检 12/12。
+- `desktop/deai_app/ui/app.py`：`split_message()` 消息路由（56 字阈值兜底，
+  失败/指引类以 `banner=True` 显式挂条）+ 双栏下方可换行提示条；
+  工具栏供应商下拉（切换即写回 `active_provider` 并落盘）、
+  输入栏头的学术翻译方向分段（`translate_target` 即时落盘）；
+  `_prepare_generation` / `_on_worker_finished` 统一开合锁与脉冲点；
+  窗口几何读写（`%APPDATA%\deai\window.json`，含最大化标记，越屏位置丢弃）。
+- `desktop/deai_app/ui/panes.py`：动作按钮收进引用表与 `set_actions_enabled()`；
+  拖放（`first_loadable_url` 挑后缀、dragEnter/Move/Leave/drop 四态 + dragOver 高亮的 properties 选择器）。
+- `desktop/deai_app/ui/segmented.py`：mouse/key 事件增加 `isEnabled()` 防线。
+- `desktop/deai_app/ui/style.py`：`#banner`、`#busyDot`、`#pane[dragOver="true"]`。
+- 测试：`test_rewrite_ui.py` 路由/快控/拖放几何/生成锁四组 +22 项，
+  `test_qt_shell.py` 最窄宽度契约改（按钮保 sizeHint，状态行保可见下限），
+  `test_rewrite_e2e.py` 失败指引断言移到提示条；桌面端门禁 266 项；引擎自检 12/12。

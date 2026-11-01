@@ -6,17 +6,20 @@
 """
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Property, QPointF, QRectF, Qt
+from PySide6.QtCore import Property, QPointF, QPropertyAnimation, QRect, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QPen, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFileDialog,
     QGraphicsDropShadowEffect,
     QFrame,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -45,6 +48,32 @@ INPUT_PLACEHOLDER = "把稿子贴在这里……（Ctrl+O 可载入 .md / .txt /
 OUTPUT_PLACEHOLDER = "改写结果与体检报告出现在这里"
 READ_SUFFIXES = {".md", ".txt", ".tex", ".bib", ".typ"}
 CAPTION_KINDS = ("min", "max", "close")
+#: 状态行兜底阈值：完成类消息（含门禁结论）最长约 54 字，必须留在状态行；
+#: 更长的（拆稿指引、供应商报错）才进可换行提示条
+LONG_HINT_CHARS = 56
+#: 窗口几何存这里：%APPDATA%\deai\window.json，不与模型配置混在一个文件
+WINDOW_FILE = "window.json"
+
+
+def split_message(text: str, *, banner: bool = False,
+                  limit: int = LONG_HINT_CHARS) -> tuple[str, str]:
+    """消息路由：返回 (状态行摘要, 提示条全文)；提示条为空代表不显示。
+
+    banner=True 用于失败与指引类消息，状态行挂摘要、提示条给全文；
+    其余只在超长时进提示条，进度与完成类消息留在状态行。
+    """
+    if banner or len(text) > limit:
+        summary = text if len(text) <= limit else text[:limit - 1] + "…"
+        return summary, text
+    return text, ""
+
+
+def load_window_state() -> dict:
+    try:
+        data = json.loads((config.config_dir() / WINDOW_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 class CaptionButton(QToolButton):
@@ -168,6 +197,8 @@ class DeaiApp(QWidget):
         shell = self.theme.shell
         self.resize(int(shell("width")), int(shell("height")))
         self.setMinimumSize(int(shell("min_width")), int(shell("min_height")))
+        self._start_maximized = False
+        self._restore_window_state()
 
         outer = QVBoxLayout(self)
         margin = int(shell("canvas_margin"))
@@ -186,7 +217,14 @@ class DeaiApp(QWidget):
         column.addWidget(self.titlebar)
 
         row = QHBoxLayout(); row.setSpacing(int(shell("pane_gap")))
-        self.input = Pane("输入", self.theme, actions=[("清空", self._clear), ("载入", self._load)])
+        self.direction_view = SegmentedControl(
+            self.theme, translator.TARGETS, self._switch_direction,
+            compact=True, accessible_name="翻译方向")
+        self.direction_view.setToolTip("学术翻译的目标语方向；切到其他模式时暂时收起")
+        self.direction_view.hide()
+        self.input = Pane("输入", self.theme, actions=[("清空", self._clear), ("载入", self._load)],
+                          header_extra=self.direction_view,
+                          drop_suffixes=READ_SUFFIXES, on_drop=self._on_file_dropped)
         self.output_view = SegmentedControl(
             self.theme, VIEW_MODES, self._switch_output_view,
             compact=True, accessible_name="输出视图",
@@ -197,6 +235,11 @@ class DeaiApp(QWidget):
                            header_extra=self.output_view)
         row.addWidget(self.input, 1); row.addWidget(self.output, 1)
         column.addLayout(row, 1)
+
+        self.banner = QLabel(""); self.banner.setObjectName("banner")
+        self.banner.setWordWrap(True)
+        self.banner.hide()
+        column.addWidget(self.banner)
 
         bar = QHBoxLayout(); bar.setSpacing(6)
         self.rewrite_button = QPushButton("AI 改写"); self.rewrite_button.setObjectName("ink")
@@ -218,7 +261,18 @@ class DeaiApp(QWidget):
         self.settings_button.setToolTip("配置供应商、密钥与改写规则（Ctrl+,）")
         self.settings_button.clicked.connect(self._open_settings)
         bar.addWidget(self.settings_button)
+        self.provider_combo = QComboBox()
+        self.provider_combo.setFixedWidth(160)
+        self.provider_combo.setToolTip("当前供应商：点击可切换，选中的会写回设置")
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_switched)
+        bar.addWidget(self.provider_combo)
         bar.addStretch()
+        self.busy_dot = QLabel(); self.busy_dot.setObjectName("busyDot")
+        self.busy_dot.setFixedSize(10, 10)
+        self.busy_dot.setToolTip("正在调用模型，等流式输出或按「停止生成」")
+        self.busy_dot.hide()
+        self._busy_animation = None
+        bar.addWidget(self.busy_dot)
         self.status = QLabel(""); self.status.setObjectName("hint")
         self.status.setMinimumWidth(0)
         bar.addWidget(self.status)
@@ -262,11 +316,64 @@ class DeaiApp(QWidget):
             self._providers = config.load_providers()
         except (config.ConfigError, OSError) as exc:
             self._providers = []
-            self.status.setText(f"配置读取失败：{exc}")
+            self._say(f"配置读取失败：{exc}", banner=True)
             self._active_provider = None
             return
         self._active_provider = self._pick_provider()
-        self.status.setText(self._idle_status())
+        self._say(self._idle_status())
+        self._sync_provider_combo()
+        self._sync_direction()
+
+    def _sync_provider_combo(self) -> None:
+        combo = self.provider_combo
+        current = self._active_provider
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItems([provider.name for provider in self._providers])
+        index = next((i for i, provider in enumerate(self._providers)
+                      if provider.name == getattr(current, "name", "")), -1)
+        combo.setCurrentIndex(index)
+        combo.setEnabled(bool(self._providers) and self._worker is None)
+        combo.blockSignals(False)
+        combo.setToolTip(self._provider_tooltip(current))
+
+    def _provider_tooltip(self, provider: config.Provider | None) -> str:
+        if provider is None:
+            return "还没有可用供应商，先点「接口设置」"
+        state = "已设密钥" if provider.api_key else "未设密钥（本地服务可留空）"
+        return f"{provider.name} · {provider.model} · {state}"
+
+    def _on_provider_switched(self, index: int) -> None:
+        if not 0 <= index < len(self._providers):
+            return
+        provider = self._providers[index]
+        if provider.name == self._settings.active_provider:
+            return
+        self._settings.active_provider = provider.name
+        self._active_provider = provider
+        try:
+            config.save_settings(self._settings)
+        except OSError as exc:
+            self._say(f"切换没保存下来：{exc}", banner=True)
+            return
+        self.provider_combo.setToolTip(self._provider_tooltip(provider))
+        self._say(self._idle_status())
+
+    def _sync_direction(self) -> None:
+        target = self._settings.translate_target
+        index = translator.TARGETS.index(target) if target in translator.TARGETS else 0
+        self.direction_view.select(index, notify=False)
+
+    def _switch_direction(self, index: int) -> None:
+        if translator.TARGETS[index] == self._settings.translate_target:
+            return
+        self._settings.translate_target = translator.TARGETS[index]
+        try:
+            config.save_settings(self._settings)
+        except OSError as exc:
+            self._say(f"切换没保存下来：{exc}", banner=True)
+            return
+        self._say(f"译文方向 · {self._direction_label()}")
 
     def _pick_provider(self) -> config.Provider | None:
         if not self._providers:
@@ -289,7 +396,7 @@ class DeaiApp(QWidget):
         try:
             return checkup.run(text, self._settings.lang)
         except EngineError as exc:
-            self._say(f"检查失败：{exc}")
+            self._say(f"检查失败：{exc}", banner=True)
             return None
 
     def _primary_label(self) -> str:
@@ -342,8 +449,34 @@ class DeaiApp(QWidget):
             self._settings = dialog.settings_out
             self._active_provider = self._pick_provider()
             self._say(f"接口已保存 · {self._active_provider.name} · {self._active_provider.model}")
+            self._sync_provider_combo()
+            self._sync_direction()
         else:
-            self.status.setText(self._idle_status())
+            self._say(self._idle_status())
+
+    def _set_busy(self, busy: bool) -> None:
+        """生成中的轻量指示：状态行旁一颗墨点做 360ms 的不透明度脉冲。"""
+        self.busy_dot.setVisible(busy)
+        if busy and motion.enabled():
+            effect = self.busy_dot.graphicsEffect()
+            if not isinstance(effect, QGraphicsOpacityEffect):
+                effect = QGraphicsOpacityEffect(self.busy_dot)
+                self.busy_dot.setGraphicsEffect(effect)
+            if self._busy_animation is None:
+                animation = QPropertyAnimation(effect, b"opacity", self.busy_dot)
+                animation.setStartValue(1.0)
+                animation.setKeyValueAt(0.5, 0.35)
+                animation.setEndValue(1.0)
+                animation.setDuration(motion.NORMAL_MS)
+                animation.setEasingCurve(motion.EASE_OUT)
+                animation.setLoopCount(-1)
+                animation.start(QPropertyAnimation.DeletionPolicy.KeepWhenStopped)
+                self._busy_animation = animation
+        elif not busy:
+            if self._busy_animation is not None:
+                self._busy_animation.stop()
+                self._busy_animation = None
+            self.busy_dot.setGraphicsEffect(None)
 
     def _prepare_generation(self, text: str, *, gate_input: bool = True) -> bool:
         local = self._local_check(text)
@@ -362,6 +495,11 @@ class DeaiApp(QWidget):
         self.rewrite_button.setText("停止生成")
         self.check_button.setEnabled(False)
         self.settings_button.setEnabled(False)
+        self.provider_combo.setEnabled(False)
+        self.direction_view.setEnabled(False)
+        self.input.set_actions_enabled(False)
+        self.output.set_actions_enabled(False)
+        self._set_busy(True)
         return True
 
     def start_rewrite(self) -> None:
@@ -487,13 +625,13 @@ class DeaiApp(QWidget):
                                     source_lang: str, target_lang: str) -> None:
         self._keep_translation_draft(draft, source_lang, target_lang)
         self.output.set_metrics("—", "—", "草稿")
-        self._say(f"译文未过降 AI：{reason} · 草稿已保留，点「重试降 AI」继续")
+        self._say(f"译文未过降 AI：{reason} · 草稿已保留，点「重试降 AI」继续", banner=True)
 
     def _on_translation_deai_cancelled(self, draft: str,
                                        source_lang: str, target_lang: str) -> None:
         self._keep_translation_draft(draft, source_lang, target_lang)
         self.output.set_metrics("—", "—", "已停止")
-        self._say("已停止降 AI：译文草稿已保留，点「重试降 AI」继续")
+        self._say("已停止降 AI：译文草稿已保留，点「重试降 AI」继续", banner=True)
 
     def _keep_translation_draft(self, draft: str, source_lang: str, target_lang: str) -> None:
         self._translation_draft = draft
@@ -547,7 +685,7 @@ class DeaiApp(QWidget):
 
     def _on_rewrite_failed(self, message: str) -> None:
         self.output.set_metrics("—", "—", "失败")
-        self._say(f"改写失败：{message}")
+        self._say(f"改写失败：{message}", banner=True)
 
     def _on_rewrite_cancelled(self) -> None:
         self.output.set_metrics("—", "—", "已停止")
@@ -562,6 +700,11 @@ class DeaiApp(QWidget):
         self.rewrite_button.setEnabled(True)
         self.check_button.setEnabled(True)
         self.settings_button.setEnabled(True)
+        self.provider_combo.setEnabled(bool(self._providers))
+        self.direction_view.setEnabled(True)
+        self.input.set_actions_enabled(True)
+        self.output.set_actions_enabled(True)
+        self._set_busy(False)
 
     # ---------- 动作 ----------
 
@@ -577,7 +720,7 @@ class DeaiApp(QWidget):
         try:
             gate = checkup.run(text, "自动")
         except EngineError as exc:
-            self._say(f"检查失败：{exc}")
+            self._say(f"检查失败：{exc}", banner=True)
             return
         self._last_gate = gate
         self._last_source = text
@@ -643,6 +786,12 @@ class DeaiApp(QWidget):
         Path(target).write_text(payload + "\n", encoding="utf-8")
         self._say(f"已写入 {target}")
 
+    def _on_file_dropped(self, path: Path) -> None:
+        if self._worker is not None:
+            self._say("生成进行中：等结束或先停止再载入")
+            return
+        self._read_into(self.input, path)
+
     def _load(self) -> None:
         if self._worker is not None:
             self._say("改写进行中：等结束或先停止再载入")
@@ -677,6 +826,8 @@ class DeaiApp(QWidget):
             self._say("生成进行中：结束或停止后再切换模式")
             return
         self._mode = index
+        self.direction_view.setVisible(index == 1)
+        self._sync_direction()
         self.rewrite_button.setText(self._primary_label())
         self.rewrite_button.setToolTip(self._primary_hint())
         self._say(HINTS[index])
@@ -701,15 +852,52 @@ class DeaiApp(QWidget):
         self._say("输出视图：逐条（规则与改法）" if index == 0
                   else "输出视图：整段（底色标出词表命中）")
 
-    def _say(self, text: str) -> None:
-        self.status.setText(text)
+    def _say(self, text: str, *, banner: bool = False) -> None:
+        status, hint = split_message(text, banner=banner)
+        self.status.setText(status)
+        if hint:
+            self.banner.setText(hint)
+            self.banner.show()
+        else:
+            self.banner.setText("")
+            self.banner.hide()
 
     # ---------- 窗口 ----------
+
+    def _restore_window_state(self) -> None:
+        state = load_window_state()
+        try:
+            width, height = int(state["size"][0]), int(state["size"][1])
+            x, y = int(state["pos"][0]), int(state["pos"][1])
+        except (KeyError, IndexError, TypeError, ValueError):
+            return
+        width = max(width, self.minimumWidth())
+        height = max(height, self.minimumHeight())
+        self.resize(width, height)
+        rect = QRect(x, y, width, height)
+        visible = any(screen.availableGeometry().intersects(rect)
+                      for screen in QApplication.screens())
+        if visible:
+            self.move(x, y)
+        self._start_maximized = bool(state.get("maximized"))
+
+    def _save_window_state(self) -> None:
+        rect = self.normalGeometry() if self.isMaximized() else self.geometry()
+        state = {"size": [rect.width(), rect.height()],
+                 "pos": [rect.x(), rect.y()],
+                 "maximized": self.isMaximized()}
+        try:
+            folder = config.ensure_config_dir()
+            (folder / WINDOW_FILE).write_text(
+                json.dumps(state, ensure_ascii=False) + "\n", encoding="utf-8")
+        except OSError:
+            pass
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         if self._worker is not None:
             self._worker.cancel()
             self._worker.wait(2000)
+        self._save_window_state()
         super().closeEvent(event)
 
     def toggle_maximize(self) -> None:
@@ -742,5 +930,8 @@ class DeaiApp(QWidget):
         if motion.enabled():
             self.setWindowOpacity(0.0)  # 先透明再 show，避免淡入前闪一帧实心窗口
         self.show()
+        if self._start_maximized:
+            self.showMaximized()
+            self._start_maximized = False
         motion.fade_in(self)
         return QApplication.exec()

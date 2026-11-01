@@ -40,6 +40,7 @@ QToolButton {{
     border-radius: {s('pane_radius')}px;
 }}
 #paneTitle {{ font-size: {f('emphasis')}pt; font-weight: 700; }}
+#pane[dragOver="true"] {{ border: 1px solid {c('focus_ring')}; }}
 #meta, #hint {{ font-size: {f('meta')}pt; color: {c('text_muted')}; }}
 QPushButton#text {{
     border: none; background: transparent; color: {c('text_secondary')};
@@ -94,6 +95,12 @@ QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
 #fieldLabel {{ font-size: {f('meta')}pt; color: {c('text_secondary')}; }}
 #dialogError {{ font-size: {f('meta')}pt; color: {c('gate_block')}; }}
 #band {{ background: {c('band_bg')}; border-top: 1px solid {c('divider')}; }}
+#busyDot {{ background: {c('ink_bg')}; border-radius: 5px; }}
+#banner {{
+    background: {c('band_bg')}; border: 1px solid {c('divider')};
+    border-radius: {s('pane_radius')}px; padding: 8px 12px;
+    font-size: {f('meta')}pt; color: {c('text_secondary')};
+}}
 #metricNum {{ font-size: {f('number')}pt; font-weight: 700; color: {c('text')}; }}
 #metricLab {{ font-size: {f('caption')}pt; color: {c('text_muted')}; }}
 #dot {{ border-radius: 4px; }}

@@ -86,12 +86,18 @@ class TestQtShell(unittest.TestCase):
         self.win.resize(int(self.theme.shell("min_width")), int(self.theme.shell("min_height")))
         self.qapp.processEvents()
         try:
+            self.assertGreaterEqual(self.win.provider_combo.width(), 120,
+                                    "供应商下拉在最窄窗口也得可点")
             for widget in (self.win.rewrite_button, self.win.check_button,
-                           self.win.strip_button, self.win.settings_button, self.win.status):
+                           self.win.strip_button, self.win.settings_button):
                 with self.subTest(widget=widget.text()):
                     self.assertFalse(widget.isHidden())
                     self.assertGreaterEqual(widget.width(), widget.sizeHint().width())
-            self.assertLessEqual(self.win.status.x() + self.win.status.width(), self.win.width())
+            # 状态行是摘要通道：允许被挤压截断，全文走提示条；只守住可见与不出窗
+            self.assertFalse(self.win.status.isHidden())
+            self.assertGreaterEqual(self.win.status.width(), 120)
+            self.assertLessEqual(self.win.status.x() + self.win.status.width(),
+                                 self.win.width())
         finally:
             self.win.resize(original)
             self.qapp.processEvents()

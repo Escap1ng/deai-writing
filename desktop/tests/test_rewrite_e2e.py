@@ -202,7 +202,9 @@ class TestRewriteEndToEnd(unittest.TestCase):
         self.assertEqual(self.win._translation_resume, ("zh", "en"))
         self.assertEqual(self.win.output.text().strip(), TRANSLATED.strip())
         self.assertEqual(self.win.rewrite_button.text(), "重试降 AI")
-        self.assertIn("草稿已保留", self.win.status.text())
+        self.assertIn("草稿已保留", self.win.banner.text(),
+                      "失败指引全文应在可换行提示条里")
+        self.assertTrue(self.win.status.text().startswith("译文未过降 AI"))
 
         before_retry = self.server.requests
         self.server.fail_deai = False
