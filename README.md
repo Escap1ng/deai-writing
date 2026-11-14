@@ -2,12 +2,13 @@
 
 [中文](README.md) | [English](README.en.md)
 
-给中文或英文文稿过三道可执行门禁：去掉 AI 味，也去掉看不见的隐写字符。规则能跑、能复检、能回归，不靠通读时的感觉。
+给中文或英文文稿过三道可执行门禁：去掉 AI 味，也去掉看不见的隐写字符。规则能跑、能复检、能回归，不靠通读时的感觉。同一套引擎也做成了桌面工作台：本地体检、模型改写、学术翻译，一个窗口里闭环。
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![gates](https://img.shields.io/badge/gates-3-brightgreen.svg)
 ![rules](https://img.shields.io/badge/rules-21-orange.svg)
 ![self-check](https://img.shields.io/badge/self--check-12%20assertions-success.svg)
+![desktop](https://img.shields.io/badge/desktop-279%20tests-success.svg)
 ![python](https://img.shields.io/badge/tested%20on-3.13%20%7C%203.14-informational.svg)
 
 ## 它做什么
@@ -19,6 +20,20 @@
 | **字符级** | `code/strip_invisible.py` | 零宽字符、bidi 控制、tag 字符、变体选择符等不可见 Unicode | 交付产物清理后复检必须退出 0 |
 
 **边界**：只处理表述与字符，不改动事实、数据与结论。去 AI 味不等于口语化，判据是「只有这位作者写得出」，来自作者本人的具体判断、具体数值与具体边界。
+
+## 桌面工作台
+
+`desktop/` 把同一套三关引擎装进无边框 Qt 工作台（PySide6），暖纸 + 墨色 + 朱砂的编辑台视觉：
+
+![降 AI 工作台：左栏原稿与三关 chips，右栏逐条报告](desktop/screenshots/workbench.png)
+
+- **本地三关体检**不调模型：词表 / 结构 / 字符三枚 chips 与命中 / 风险 / 门禁三个数字即时上色，口径与命令行逐条一致。
+- **AI 改写**走 OpenAI 兼容接口，后台流式输出，每轮结束本地复检、把命中与改法回灌模型；生成期有轮次进度标签，Esc 或「停止生成」随时中断。
+- **学术翻译**先跨语言、再自动过同一套降 AI 闭环；降 AI 段失败或停止时译文草稿保留，「重试降 AI」只重跑该段。
+- **报告可交互**：逐条视图每条命中可点击，输入栏光标跳到对应行并整行高亮；超过 30 条时「另有 N 处」点击展开；整段视图就地标色，不改动一个可见字符。
+- **顺手的小事**：双栏分隔条可拖动且比例记忆；稿子直接拖进输入栏；供应商下拉与翻译方向前置到主界面；长提示条可收起；窗口几何记忆。
+
+安装、动效与打包命令见 [desktop/README.md](desktop/README.md)。运行时第三方依赖只有 PySide6-Essentials，接口调用与三关引擎全部标准库。
 
 ## 实测输出
 
@@ -79,11 +94,7 @@ python3 code/check_phrasing.py draft.md --lang en      # 英文提示、英文�
 python3 code/selfcheck.py                              # 12 项断言：正反例 + 规范文档自检 + 字符级闭环
 ```
 
-改过词表、阈值或示例后必跑。
-
-## 桌面应用
-
-`desktop/` 是同一套三关引擎的无边框 Qt 工作台：本地体检、模型改写、学术翻译，以及打包成 exe 的脚本。安装、动效与打包命令见 [desktop/README.md](desktop/README.md)。
+改过词表、阈值或示例后必跑。桌面端另有 279 项无头测试（含界面几何、动效降级与端到端改写），命令见 [desktop/README.md](desktop/README.md)。
 
 ## 目录结构
 
@@ -93,6 +104,10 @@ deai-writing/
 ├── README.md                      # 本文件（中文）：快速开始、目录结构、分类依据与扩展约定
 ├── README.en.md                   # 英文版 README：与 README.md 同构
 ├── desktop/                       # 桌面应用：无边框 Qt 界面、改写与翻译、exe 打包
+│   ├── deai_app/                  #   ui / core / bridge 三层 + assets 主题与示例配置
+│   ├── tests/                     #   279 项无头测试：契约、几何、动效、端到端
+│   ├── build/                     #   PyInstaller 打包清单与脚本
+│   └── screenshots/               #   界面截图（README 配图）
 ├── code/                          # 可执行脚本与数据
 │   ├── check_phrasing.py          #   词表级检查器：扫模板腔、套话、空泛、伪洞察，命中退出 1
 │   ├── phrasing-blacklist.json    #   中英词表与句式规则（单一事实源，加词只改它）

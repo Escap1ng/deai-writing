@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Sequence
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QUrl, Qt
+from PySide6.QtCore import QEvent, QUrl, Qt, Signal
 from PySide6.QtGui import QTextBlockFormat, QTextCursor
 from PySide6.QtWidgets import (
     QFrame,
@@ -40,6 +40,9 @@ def first_loadable_url(urls: list[QUrl], suffixes: Collection[str]) -> Path | No
 
 
 class Pane(QFrame):
+    #: 只读栏里点到带 href 的文字时发出（QTextEdit 没有 anchorClicked，这里自己识别）
+    link_clicked = Signal(QUrl)
+
     def __init__(self, title: str, theme: Theme, *, readonly: bool = False,
                  actions: Sequence[tuple[str, Callable[[], None]]] = (), band: str = "chips",
                  header_extra: QWidget | None = None,
@@ -82,9 +85,11 @@ class Pane(QFrame):
         self.edit.setLineWrapMode(QTextEdit.LineWrapMode.WidgetWidth)
         self.edit.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.edit.setReadOnly(readonly)
+        # QTextEdit 不会自动打开链接：报告里的 locate/more 锚点只发 anchorClicked，由主窗口处理
         self.edit.document().setDocumentMargin(int(theme.shell("document_margin")))
         self.edit.textChanged.connect(self.refresh_meta)
         self._wheel_animation = None
+        self._readonly = readonly
         self.edit.viewport().installEventFilter(self)
         outer.addWidget(self.edit, 1)
         outer.addWidget(self._build_band())
@@ -101,6 +106,13 @@ class Pane(QFrame):
                         self._wheel_animation.stop()
                     self._wheel_animation = motion.animate_value(
                         bar, "value", bar.value(), target, motion.FAST_MS)
+                return True
+        if (watched is self.edit.viewport() and self._readonly
+                and event.type() == QEvent.Type.MouseButtonRelease
+                and event.button() == Qt.MouseButton.LeftButton):
+            anchor = self.edit.anchorAt(event.position().toPoint())
+            if anchor:
+                self.link_clicked.emit(QUrl(anchor))
                 return True
         return super().eventFilter(watched, event)
 
@@ -150,6 +162,11 @@ class Pane(QFrame):
 
     def _build_band(self) -> QWidget:
         band = QWidget(); band.setObjectName("band"); self.band = band
+        # 底部带是面板最后一块：下缘两角跟面板同半径，避免直角从圆角里露出来
+        radius = int(self.theme.shell("pane_radius")) - 1
+        band.setStyleSheet(
+            f"#band {{ border-bottom-left-radius: {radius}px;"
+            f" border-bottom-right-radius: {radius}px; }}")
         layout = QHBoxLayout(band)
         layout.setContentsMargins(12, 8, 12, 10); layout.setSpacing(18)
         band.setFixedHeight(int(self.theme.shell("band_height")))
