@@ -2,12 +2,13 @@
 
 [中文](README.md) | English
 
-Three runnable gates for any Chinese or English draft: remove the AI-slop habits, and remove the invisible watermark characters. The rules run, re-check and regress on their own, so you do not have to rely on how a draft feels.
+Three runnable gates for any Chinese or English draft: remove the AI-slop habits, and remove the invisible watermark characters. The rules run, re-check and regress on their own, so you do not have to rely on how a draft feels. The same engine also ships as a desktop workbench: local checks, model rewrite and academic translation, closed in one window.
 
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![gates](https://img.shields.io/badge/gates-3-brightgreen.svg)
 ![rules](https://img.shields.io/badge/rules-21-orange.svg)
 ![self-check](https://img.shields.io/badge/self--check-12%20assertions-success.svg)
+![desktop](https://img.shields.io/badge/desktop-279%20tests-success.svg)
 ![python](https://img.shields.io/badge/tested%20on-3.13%20%7C%203.14-informational.svg)
 
 ## What it does
@@ -19,6 +20,20 @@ Three runnable gates for any Chinese or English draft: remove the AI-slop habits
 | **Characters** | `code/strip_invisible.py` | Zero-width characters, bidi controls, tag characters, variation selectors | Final artifacts must re-check at exit 0 after cleaning |
 
 **Scope.** It only touches wording and characters. Facts, data and conclusions stay as they are. De-slopping is not the same as making writing casual; the test is whether only this author could have written the sentence, drawn from that author's own judgements, numbers and limits.
+
+## Desktop workbench
+
+`desktop/` puts the same three-gate engine into a frameless Qt workbench (PySide6), styled as a warm-paper editing desk with ink text and a cinnabar primary action:
+
+![The de-AI workbench: source and gate chips on the left, the itemised report on the right](desktop/screenshots/workbench.png)
+
+- **Local three-gate check** without any model call: word-list / structure / character chips and the hits / risk / verdict numbers colour instantly, matching the CLI line by line.
+- **AI rewrite** over any OpenAI-compatible endpoint, streamed on a background thread; each round re-checks locally and feeds the hits and fixes back to the model. A round-progress label shows while generating; Esc or "stop" interrupts at any time.
+- **Academic translation** crosses the language first, then runs the same de-AI loop automatically; if the de-AI stage fails or is stopped, the translation draft is kept and "retry de-AI" re-runs only that stage.
+- **Interactive report**: in the itemised view every hit is clickable and moves the input cursor to that line with a brief highlight; past 30 hits, "N more" expands on click; the whole-text view marks hits in place without changing a single visible character.
+- **Small conveniences**: a draggable pane splitter whose ratio is remembered; drop drafts straight into the input pane; provider and translation-direction controls live on the main window; long hints can be dismissed; window geometry is remembered.
+
+Setup, motion and packaging live in [desktop/README.md](desktop/README.md). The only third-party runtime dependency is PySide6-Essentials; the API calls and the three gates use the standard library.
 
 ## What it looks like
 
@@ -73,11 +88,7 @@ A rule carrying `max_per_document` is a frequency cap, and only uses above the c
 python3 code/selfcheck.py                              # 12 assertions: fixtures, doc self-check, character round-trip
 ```
 
-Run it whenever you change the word list, a threshold or a fixture.
-
-## Desktop app
-
-`desktop/` is a frameless Qt workbench built on the same three gates: local checks, model rewrite, academic translation, and the exe build script. Setup, motion and packaging live in [desktop/README.md](desktop/README.md).
+Run it whenever you change the word list, a threshold or a fixture. The desktop side adds 279 headless tests (UI geometry, motion degradation and end-to-end rewrite); the commands live in [desktop/README.md](desktop/README.md).
 
 ## Repository layout
 
@@ -87,6 +98,10 @@ deai-writing/
 ├── README.md                      # Chinese README: quick start, layout, rationale, conventions
 ├── README.en.md                   # This file: the same structure in English
 ├── desktop/                       # Desktop app: frameless Qt UI, rewrite and translation, exe build
+│   ├── deai_app/                  #   ui / core / bridge layers plus assets (theme, example providers)
+│   ├── tests/                     #   279 headless tests: contracts, geometry, motion, end-to-end
+│   ├── build/                     #   PyInstaller manifest and build scripts
+│   └── screenshots/               #   UI screenshots used by the READMEs
 ├── code/                          # Runnable scripts and data
 │   ├── check_phrasing.py          #   Word-list checker: template openers, filler, empty claims, fake insight
 │   ├── phrasing-blacklist.json    #   Chinese and English rules (single source of truth; add words here only)

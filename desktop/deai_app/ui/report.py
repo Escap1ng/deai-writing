@@ -2,6 +2,7 @@
 
 先产出 (kind, text) 块序列（纯数据，测试直接断言它），再包成 HTML 交给只读栏。
 分层规则：组标题 > 命中条目（规则名与位置用次级色，命中原文用正文色）> 改法（缩进、弱化色）。
+links=True 时条目带 locate 锚点（点击定位输入行），「另有 N 处」带 more 锚点（点击展开）。
 """
 from __future__ import annotations
 
@@ -117,29 +118,55 @@ def render_annotated_html(report: GateReport, source: str,
         paragraphs.append("<br>".join(block))
     body = "".join(f'<p style="margin:0 0 10px 0;">{text}</p>' for text in paragraphs)
     return (
-        f"<div style=\"font-family:'Microsoft YaHei UI';font-size:{theme.size('body')}pt;"
+        f"<div style=\"font-family:'{theme.family('cjk')}';font-size:{theme.size('body')}pt;"
         f"color:{theme.color('text')};line-height:150%;\">{body}</div>"
     )
 
 
+def _hit_locations(report: GateReport, limit: int) -> list[tuple[int, int]]:
+    """与 blocks() 的 item 顺序一一对应的 (行, 列)；字符级汇总行给 (0, 0)。"""
+    locations: list[tuple[int, int]] = []
+    locations += [(int(hit["line"]), int(hit["col"])) for hit in report.phrasing[:limit]]
+    locations += [(int(hit["line"]), 1) for hit in report.style[:limit]]
+    if report.invisible_total:
+        locations.append((0, 0))
+    return locations
+
+
 def render_html(report: GateReport, source: str, theme: Theme | None = None,
-                limit: int = LIMIT) -> str:
+                limit: int = LIMIT, links: bool = False) -> str:
     theme = theme or load_theme()
     c = theme.color
     body = theme.size("body")
     styles = {
-        "head": f"font-size:{theme.size('emphasis')}pt;font-weight:700;color:{c('text')};margin-top:2px",
+        "head": f"font-size:{theme.size('title')}pt;font-weight:700;color:{c('text')};margin-top:2px",
         "sub": f"font-size:{theme.size('meta')}pt;color:{c('text_secondary')};margin-bottom:6px",
         "group": f"font-size:{theme.size('meta')}pt;font-weight:700;color:{c('text_muted')};"
-                 f"letter-spacing:1px;margin-top:14px;border-bottom:1px solid {c('divider')};padding-bottom:2px",
-        "item": f"font-size:{body}pt;color:{c('text')};margin-top:6px;line-height:150%",
+                 f"letter-spacing:1px;margin-top:16px;border-bottom:1px solid {c('divider')};padding-bottom:3px",
+        "item": f"font-size:{body}pt;color:{c('text')};margin-top:8px;line-height:150%",
         "fix": f"font-size:{theme.size('meta')}pt;color:{c('text_muted')};margin-left:22px;line-height:145%",
         "more": f"font-size:{theme.size('meta')}pt;color:{c('text_secondary')};margin-left:22px",
         "note": f"font-size:{body}pt;color:{c('text_secondary')}",
     }
-    parts = [f"<div style=\"font-family:'Microsoft YaHei UI';line-height:150%\">"]
+    link_style = f"color:{c('text')};text-decoration:none"
+    more_link_style = f"color:{c('focus_ring')};text-decoration:none"
+    locations = _hit_locations(report, limit) if links else []
+    location_index = 0
+    parts = [f"<div style=\"font-family:'{theme.family('cjk')}';line-height:150%\">"]
     for kind, text in blocks(report, source, limit):
-        prefix = "改法：" if kind == "fix" else ("· " if kind == "more" else "")
-        parts.append(f"<p style=\"{styles[kind]}\">{prefix}{html.escape(text)}</p>")
+        prefix = "改法：" if kind == "fix" else ""
+        content = html.escape(text)
+        if links and kind == "item" and location_index < len(locations):
+            line, col = locations[location_index]
+            location_index += 1
+            if line > 0:
+                tip = html.escape(f"点击定位到输入第 {line} 行", quote=True)
+                content = (f'<a href="locate:{line},{col}" style="{link_style}" '
+                           f'title="{tip}">{content}</a>')
+        elif links and kind == "more":
+            tip = html.escape("点击展开剩余条目", quote=True)
+            content = (f'<a href="more:{location_index}" style="{more_link_style}" '
+                       f'title="{tip}">{content}（点击展开）</a>')
+        parts.append(f"<p style=\"{styles[kind]}\">{prefix}{content}</p>")
     parts.append("</div>")
     return "".join(parts)

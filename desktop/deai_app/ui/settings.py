@@ -60,8 +60,11 @@ class SettingsDialog(QDialog):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(12, 12, 12, 12)
         card = QFrame(); card.setObjectName("dialogCard")
-        shadow = QGraphicsDropShadowEffect(blurRadius=30, xOffset=0, yOffset=8)
-        shadow.setColor(QColor(20, 20, 22, 52))
+        shadow = QGraphicsDropShadowEffect(blurRadius=int(theme.shell("shadow_blur")),
+                                           xOffset=0, yOffset=int(theme.shell("shadow_y")))
+        shadow_color = QColor(theme.color("text"))
+        shadow_color.setAlpha(int(theme.shell("shadow_alpha")) + 6)
+        shadow.setColor(shadow_color)
         card.setGraphicsEffect(shadow)
         outer.addWidget(card)
 

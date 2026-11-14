@@ -10,8 +10,8 @@ import json
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Property, QPointF, QPropertyAnimation, QRect, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QPen, QShortcut
+from PySide6.QtCore import Property, QPointF, QPropertyAnimation, QRect, QRectF, Qt, QTimer, QUrl
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPainter, QPen, QShortcut, QTextFormat
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSplitter,
+    QTextEdit,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -44,7 +46,7 @@ HINTS = {
     0: "Ctrl+Enter 改写 · Ctrl+O 载入",
     1: "Ctrl+Enter 翻译 · 译文默认再过降 AI",
 }
-INPUT_PLACEHOLDER = "把稿子贴在这里……（Ctrl+O 可载入 .md / .txt / .tex）"
+INPUT_PLACEHOLDER = "把稿子贴在这里，或拖入 .md / .txt / .tex · Ctrl+Enter 开始"
 OUTPUT_PLACEHOLDER = "改写结果与体检报告出现在这里"
 READ_SUFFIXES = {".md", ".txt", ".tex", ".bib", ".typ"}
 CAPTION_KINDS = ("min", "max", "close")
@@ -88,7 +90,7 @@ class CaptionButton(QToolButton):
         self.theme = theme
         self.kind = kind
         self.setObjectName("close" if kind == "close" else "")
-        self.setFixedSize(40, 28)
+        self.setFixedSize(40, 32)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setToolTip({"min": "最小化", "max": "最大化", "close": "关闭"}[kind])
@@ -154,19 +156,44 @@ def ensure_app(theme: Theme) -> QApplication:
     return app
 
 
+class BrandMark(QWidget):
+    """品牌印记：朱砂底圆角方章 + 一道墨白横笔，QPainter 绘制，不用字形。"""
+
+    def __init__(self, theme: Theme) -> None:
+        super().__init__()
+        self.theme = theme
+        self.setFixedSize(16, 16)
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(self.theme.color("ink_bg")))
+        painter.drawRoundedRect(QRectF(0, 0, 16, 16), 4, 4)
+        pen = QPen(QColor(self.theme.color("ink_fg")))
+        pen.setWidthF(2.0)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        painter.drawLine(QPointF(4.5, 8), QPointF(11.5, 8))
+        painter.end()
+
+
 class TitleBar(QWidget):
     def __init__(self, theme: Theme, on_tab, on_minimize, on_maximize, on_close) -> None:
         super().__init__()
         self.setFixedHeight(int(theme.shell("titlebar_height")))
         self.setStyleSheet("background: transparent;")
         row = QHBoxLayout(self)
-        # 左边距 = 栏内容边距 + 文档边距，品牌与两栏标题同一条左缘线
-        row.setContentsMargins(int(theme.shell("content_padding")) + int(theme.shell("document_margin")),
+        # 左边距 = 栏内容边距 + 文档边距 - 印记占位（16 + 8），品牌文字仍与两栏标题同一条左缘线
+        row.setContentsMargins(int(theme.shell("content_padding")) + int(theme.shell("document_margin")) - 24,
                                0, 0, 0)
         row.setSpacing(4)
+        brand_row = QHBoxLayout(); brand_row.setSpacing(8)
+        brand_row.addWidget(BrandMark(theme))
         self.brand_label = QLabel("降 AI 工作台")
         self.brand_label.setObjectName("brand")
-        row.addWidget(self.brand_label)
+        brand_row.addWidget(self.brand_label)
+        row.addLayout(brand_row)
         row.addSpacing(24)
         self.tabs = SegmentedControl(theme, MODES, on_tab)
         self.tabs.setToolTip("切换模式（Ctrl+1 / Ctrl+2）")
@@ -206,7 +233,9 @@ class DeaiApp(QWidget):
         card = QFrame(); card.setObjectName("card")
         shadow = QGraphicsDropShadowEffect(blurRadius=int(shell("shadow_blur")),
                                            xOffset=0, yOffset=int(shell("shadow_y")))
-        shadow.setColor(QColor(20, 20, 22, int(shell("shadow_alpha"))))
+        shadow_color = QColor(self.theme.color("text"))
+        shadow_color.setAlpha(int(shell("shadow_alpha")))
+        shadow.setColor(shadow_color)
         card.setGraphicsEffect(shadow)
         outer.addWidget(card)
 
@@ -216,7 +245,10 @@ class DeaiApp(QWidget):
                                  self.toggle_maximize, self.close)
         column.addWidget(self.titlebar)
 
-        row = QHBoxLayout(); row.setSpacing(int(shell("pane_gap")))
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.splitter.setObjectName("paneSplitter")
+        self.splitter.setHandleWidth(int(shell("splitter_width")))
+        self.splitter.setChildrenCollapsible(False)
         self.direction_view = SegmentedControl(
             self.theme, translator.TARGETS, self._switch_direction,
             compact=True, accessible_name="翻译方向")
@@ -233,13 +265,25 @@ class DeaiApp(QWidget):
         self.output = Pane("输出", self.theme, readonly=True, band="metrics",
                            actions=[("复制", self._copy), ("存为文件", self._save)],
                            header_extra=self.output_view)
-        row.addWidget(self.input, 1); row.addWidget(self.output, 1)
-        column.addLayout(row, 1)
+        self.input.setMinimumWidth(280)
+        self.output.setMinimumWidth(280)
+        self.splitter.addWidget(self.input); self.splitter.addWidget(self.output)
+        self.splitter.setSizes([1, 1])
+        column.addWidget(self.splitter, 1)
 
+        banner_row = QHBoxLayout(); banner_row.setSpacing(6)
         self.banner = QLabel(""); self.banner.setObjectName("banner")
         self.banner.setWordWrap(True)
-        self.banner.hide()
-        column.addWidget(self.banner)
+        banner_row.addWidget(self.banner, 1)
+        self.banner_close = QPushButton("收起"); self.banner_close.setObjectName("text")
+        self.banner_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.banner_close.setToolTip("收起这条提示（新消息出现时会再展开）")
+        self.banner_close.clicked.connect(self._dismiss_banner)
+        banner_row.addWidget(self.banner_close, 0, Qt.AlignmentFlag.AlignTop)
+        self.banner_widget = QWidget()
+        self.banner_widget.setLayout(banner_row)
+        self.banner_widget.hide()
+        column.addWidget(self.banner_widget)
 
         bar = QHBoxLayout(); bar.setSpacing(6)
         self.rewrite_button = QPushButton("AI 改写"); self.rewrite_button.setObjectName("ink")
@@ -249,6 +293,7 @@ class DeaiApp(QWidget):
         bar.addWidget(self.rewrite_button)
         self.check_button = QPushButton("本地三关体检"); self.check_button.setObjectName("ghost")
         self.check_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.check_button.setToolTip("只跑本地三关检查，不调用模型（Ctrl+Shift+Enter）")
         self.check_button.clicked.connect(self.run_check)
         bar.addWidget(self.check_button)
         strip = QPushButton("清除不可见字符"); strip.setObjectName("ghost")
@@ -273,6 +318,9 @@ class DeaiApp(QWidget):
         self.busy_dot.hide()
         self._busy_animation = None
         bar.addWidget(self.busy_dot)
+        self.progress_label = QLabel(""); self.progress_label.setObjectName("meta")
+        self.progress_label.hide()
+        bar.addWidget(self.progress_label)
         self.status = QLabel(""); self.status.setObjectName("hint")
         self.status.setMinimumWidth(0)
         bar.addWidget(self.status)
@@ -295,13 +343,15 @@ class DeaiApp(QWidget):
         self.input.set_placeholder(INPUT_PLACEHOLDER)
         self.output.set_placeholder(OUTPUT_PLACEHOLDER)
         self.input.refresh_meta()
+        self._report_expanded = False
         self.input.edit.textChanged.connect(self._on_input_changed)
+        self.output.link_clicked.connect(self._on_report_anchor)
         self._reload_config()
         for sequence, handler in (
             ("Ctrl+Return", self.start_primary_action), ("Ctrl+Shift+Return", self.run_check),
             ("Ctrl+1", lambda: self._select_tab(0)),
             ("Ctrl+2", lambda: self._select_tab(1)), ("Ctrl+O", self._load), ("Ctrl+S", self._save),
-            ("Ctrl+,", self._open_settings),
+            ("Ctrl+,", self._open_settings), ("Esc", self._stop_generation),
         ):
             shortcut = QShortcut(QKeySequence(sequence), self)
             shortcut.activated.connect(handler)
@@ -488,6 +538,7 @@ class DeaiApp(QWidget):
         self._last_source = ""
         self._last_result = None
         self._stream_text = ""
+        self._report_expanded = False
         self._output_view = 1
         self.output_view.select(1, notify=False)
         self.output.set_text("")
@@ -499,6 +550,8 @@ class DeaiApp(QWidget):
         self.direction_view.setEnabled(False)
         self.input.set_actions_enabled(False)
         self.output.set_actions_enabled(False)
+        self.progress_label.setText("准备中")
+        self.progress_label.show()
         self._set_busy(True)
         return True
 
@@ -600,8 +653,10 @@ class DeaiApp(QWidget):
         self.output.set_text("")
         self._stream_text = ""
         if stage == translator.STAGE_TRANSLATE:
+            self.progress_label.setText("翻译阶段")
             self._say(f"翻译中 · {self._direction_label()}")
         else:
+            self.progress_label.setText(f"去 AI 第 {index}/{self._settings.max_rounds} 轮")
             self._say(f"译文已生成 · 去 AI 第 {index} 轮")
 
     def _on_translation_done(self, result) -> None:
@@ -645,6 +700,8 @@ class DeaiApp(QWidget):
         self.rewrite_button.setToolTip(self._primary_hint())
 
     def _on_input_changed(self) -> None:
+        if self.input.edit.extraSelections():
+            self.input.edit.setExtraSelections([])
         if self._translation_draft is None or self._worker is not None:
             return
         self._translation_draft = None
@@ -657,6 +714,7 @@ class DeaiApp(QWidget):
         if index > 1:
             self._stream_text = ""
             self.output.set_text("")
+        self.progress_label.setText(f"第 {index}/{self._settings.max_rounds} 轮")
         self._say(f"第 {index} 轮生成中……")
 
     def _on_delta(self, piece: str) -> None:
@@ -704,6 +762,7 @@ class DeaiApp(QWidget):
         self.direction_view.setEnabled(True)
         self.input.set_actions_enabled(True)
         self.output.set_actions_enabled(True)
+        self.progress_label.hide()
         self._set_busy(False)
 
     # ---------- 动作 ----------
@@ -725,6 +784,7 @@ class DeaiApp(QWidget):
         self._last_gate = gate
         self._last_source = text
         self._last_result = None
+        self._report_expanded = False
         self._render_output()
         state = (len(gate.phrasing), gate.style_risk, gate.invisible_total)
         self.input.set_gate(*state)
@@ -839,12 +899,18 @@ class DeaiApp(QWidget):
     def _render_output(self) -> None:
         if self._last_gate is None:
             return
-        renderer = (report.render_annotated_html if self._output_view == 1
-                    else report.render_html)
-        self.output.set_html(renderer(self._last_gate, self._last_source, self.theme))
+        if self._output_view == 1:
+            self.output.set_html(report.render_annotated_html(
+                self._last_gate, self._last_source, self.theme))
+        else:
+            limit = 100000 if self._report_expanded else report.LIMIT
+            self.output.set_html(report.render_html(
+                self._last_gate, self._last_source, self.theme,
+                limit=limit, links=True))
 
     def _switch_output_view(self, index: int) -> None:
         self._output_view = index
+        self._report_expanded = False
         if self._last_gate is None:
             self._say("先跑一次体检，再切换输出视图")
             return
@@ -857,15 +923,64 @@ class DeaiApp(QWidget):
         self.status.setText(status)
         if hint:
             self.banner.setText(hint)
-            self.banner.show()
+            self.banner_widget.show()
         else:
             self.banner.setText("")
-            self.banner.hide()
+            self.banner_widget.hide()
+
+    def _dismiss_banner(self) -> None:
+        self.banner_widget.hide()
+
+    def _stop_generation(self) -> None:
+        """Esc：只在生成中生效，等价于点「停止生成」。"""
+        if self._worker is not None and self.rewrite_button.isEnabled():
+            self.start_primary_action()
+
+    def _on_report_anchor(self, url: QUrl) -> None:
+        """报告条目/「另有 N 处」的锚点：展开剩余条目，或定位输入行。"""
+        scheme, _, payload = url.toString().partition(":")
+        if scheme == "more":
+            self._report_expanded = True
+            self._render_output()
+            return
+        if scheme != "locate":
+            return
+        try:
+            line, col = (int(part) for part in payload.split(","))
+        except ValueError:
+            return
+        if self._last_result is not None:
+            self._say("报告对应的是改写结果：已切到整段视图")
+            if self._output_view != 1:
+                self.output_view.select(1)
+            return
+        self._locate_input(line, col)
+
+    def _locate_input(self, line: int, col: int) -> None:
+        """把输入栏光标移到报告条目对应的位置，并整行高亮片刻。"""
+        document = self.input.edit.document()
+        block = document.findBlockByNumber(max(0, line - 1))
+        if not block.isValid():
+            return
+        position = block.position() + max(0, col - 1)
+        cursor = self.input.edit.textCursor()
+        cursor.setPosition(min(position, document.characterCount() - 1))
+        self.input.edit.setTextCursor(cursor)
+        self.input.edit.ensureCursorVisible()
+        selection = QTextEdit.ExtraSelection()
+        selection.format.setBackground(QColor(self.theme.color("mark_bg")))
+        selection.format.setProperty(QTextFormat.Property.FullWidthSelection, True)
+        selection.cursor = self.input.edit.textCursor()
+        selection.cursor.clearSelection()
+        self.input.edit.setExtraSelections([selection])
+        QTimer.singleShot(1500, lambda: self.input.edit.setExtraSelections([]))
+        self._say(f"已定位到输入第 {line} 行第 {col} 列")
 
     # ---------- 窗口 ----------
 
     def _restore_window_state(self) -> None:
         state = load_window_state()
+        self._restore_split = state.get("split")
         try:
             width, height = int(state["size"][0]), int(state["size"][1])
             x, y = int(state["pos"][0]), int(state["pos"][1])
@@ -883,9 +998,12 @@ class DeaiApp(QWidget):
 
     def _save_window_state(self) -> None:
         rect = self.normalGeometry() if self.isMaximized() else self.geometry()
+        sizes = self.splitter.sizes()
+        total = sum(sizes)
         state = {"size": [rect.width(), rect.height()],
                  "pos": [rect.x(), rect.y()],
-                 "maximized": self.isMaximized()}
+                 "maximized": self.isMaximized(),
+                 "split": [round(value / total, 4) for value in sizes] if total else None}
         try:
             folder = config.ensure_config_dir()
             (folder / WINDOW_FILE).write_text(
@@ -905,6 +1023,15 @@ class DeaiApp(QWidget):
             self.showNormal()
         else:
             self.showMaximized()
+
+    def showEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        super().showEvent(event)
+        # 分栏比例要等分隔条拿到真实宽度再应用，构造期设置会被首次布局冲掉
+        split = getattr(self, "_restore_split", None)
+        if (isinstance(split, list) and len(split) == 2
+                and all(isinstance(v, (int, float)) and v > 0 for v in split)):
+            self._restore_split = None
+            QTimer.singleShot(0, lambda: self.splitter.setSizes([int(v * 1000) for v in split]))
 
     def _resize_edges(self, x: int, y: int) -> Qt.Edge:
         margin = int(self.theme.shell("canvas_margin"))
