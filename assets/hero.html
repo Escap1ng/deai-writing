@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<title>降 AI 写作门禁</title>
+<style>
+  :root{
+    --bg-a:#FFFFFF; --bg-b:#F4F5F7; --bg-c:#E9F0FB;
+    --glow:rgba(11,99,197,.12);
+    --text:#14171A; --text-2:#4E5661; --text-3:#7A828C;
+    --line:#E7E9ED; --surface:#FFFFFF;
+    --accent:#0B63C5; --accent-soft:#DCE9FD;
+    --pass:#1A7F37; --warn:#9A6700;
+    --serif:"Noto Serif SC","Source Han Serif SC","STSong","SimSun",serif;
+    --sans:"Microsoft YaHei UI","Noto Sans SC","Segoe UI",system-ui,sans-serif;
+  }
+  html[data-theme="dark"]{
+    --bg-a:#14171A; --bg-b:#191E25; --bg-c:#15243C;
+    --glow:rgba(111,177,255,.16);
+    --text:#F4F5F7; --text-2:#B9C2CF; --text-3:#8B93A0;
+    --line:#333A44; --surface:#1F2328;
+    --accent:#6FB1FF; --accent-soft:#1C3A5E;
+    --pass:#4CC38A; --warn:#E3B341;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1000px;height:320px;overflow:hidden}
+  body{
+    font-family:var(--sans); color:var(--text);
+    background:
+      radial-gradient(560px 300px at 88% -10%, var(--glow), transparent 70%),
+      linear-gradient(135deg, var(--bg-a) 0%, var(--bg-b) 58%, var(--bg-c) 100%);
+    -webkit-font-smoothing:antialiased;
+    position:relative;
+  }
+  .wrap{position:absolute; inset:0; padding:44px 52px 40px; display:flex; flex-direction:column;}
+  .kicker{display:flex; align-items:center; gap:12px; margin-bottom:14px;}
+  .bar{width:6px; height:22px; border-radius:3px; background:var(--accent);}
+  .kicker span{font-size:14px; letter-spacing:.32em; color:var(--accent); font-weight:600;}
+  h1{font-family:var(--serif); font-weight:900; font-size:60px; line-height:1.12; letter-spacing:.02em;}
+  .sub{margin-top:14px; font-size:19px; line-height:1.5; color:var(--text-2); max-width:760px;}
+  .chips{margin-top:auto; display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+  .chip{
+    display:inline-flex; align-items:center; gap:9px;
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:999px; padding:9px 16px; font-size:15px; color:var(--text-2);
+  }
+  .chip b{color:var(--text); font-weight:600;}
+  .dot{width:8px; height:8px; border-radius:50%;}
+  .dot.a{background:var(--accent)} .dot.p{background:var(--pass)} .dot.w{background:var(--warn)}
+  .chip.app{margin-left:auto; border-color:var(--accent); color:var(--text);}
+  .rule{position:absolute; left:52px; right:52px; bottom:0; height:3px; border-radius:3px 3px 0 0;
+        background:linear-gradient(90deg, var(--accent), transparent 72%);}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="kicker"><i class="bar"></i><span>可执行 · 可复检 · 可回归</span></div>
+    <h1>降 AI 写作门禁</h1>
+    <p class="sub">词表、结构、字符三道关，把模板腔、结构套路与看不见的隐写字符挡在交付之前；同一套引擎也是桌面工作台。</p>
+    <div class="chips">
+      <span class="chip"><i class="dot a"></i>词表级 <b>21 条规则</b></span>
+      <span class="chip"><i class="dot w"></i>结构级 <b>6 项指标</b></span>
+      <span class="chip"><i class="dot p"></i>字符级 <b>清理后复检</b></span>
+      <span class="chip app">桌面工作台 · 体检 / 改写 / 翻译</span>
+    </div>
+  </div>
+  <div class="rule"></div>
+  <script>
+    if (new URLSearchParams(location.search).has("dark")) {
+      document.documentElement.dataset.theme = "dark";
+    }
+  </script>
+</body>
+</html>
