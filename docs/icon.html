@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>图标工坊 · deai-writing</title>
+<style>
+  :root{
+    --paper:#F4F5F7; --surface:#FFFFFF; --band:#FBFBFC;
+    --text:#14171A; --text-2:#4E5661; --text-3:#7A828C;
+    --line:#E7E9ED; --line-2:#D3D8DE;
+    --ink:#0B63C5; --ink-deep:#08315F; --ink-hover:#0A57AD; --ink-soft:#DCE9FD;
+    --pass:#1A7F37; --warn:#9A6700; --block:#B42318; --mark:#FDF0C2;
+    --scrim:#1F2328;
+    --serif:"Noto Serif SC","Source Han Serif SC","STSong","SimSun",serif;
+    --sans:"Segoe UI","Microsoft YaHei UI",system-ui,-apple-system,sans-serif;
+    --rail-w:344px; --head-h:64px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--sans); font-size:17px; line-height:1.6;
+    color:var(--text); background:var(--paper);
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--ink-soft); color:var(--ink-deep)}
+  :focus-visible{outline:2px solid var(--ink); outline-offset:2px; border-radius:4px}
+
+  /* ---------- scrollbar ---------- */
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:var(--paper)}
+  ::-webkit-scrollbar-thumb{background:#B9C2CF;border-radius:6px;border:2px solid var(--paper)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--ink)}
+  *{scrollbar-width:thin;scrollbar-color:#B9C2CF var(--paper)}
+
+  /* ---------- header ---------- */
+  header{
+    position:fixed; inset:0 0 auto 0; height:var(--head-h); z-index:50;
+    display:flex; align-items:center; gap:16px; padding:0 24px;
+    background:rgba(255,255,255,.92); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+    animation:drop .5s cubic-bezier(.2,.7,.3,1) both;
+  }
+  @keyframes drop{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}
+  .brand .mini{width:30px;height:30px;flex:none;filter:drop-shadow(0 2px 4px rgba(8,49,95,.25))}
+  .brand .mini svg{width:100%;height:100%;display:block}
+  .brand h1{font-family:var(--serif);font-size:21px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+  .brand small{font-size:13px;color:var(--text-3);letter-spacing:.08em;white-space:nowrap}
+  .head-spacer{flex:1}
+  .seg{display:flex;background:#ECEEF1;border:1px solid var(--line-2);border-radius:9px;padding:3px;gap:2px}
+  .seg button{
+    font:inherit;font-size:14px;padding:4px 14px;border:none;border-radius:6px;cursor:pointer;
+    background:transparent;color:var(--text-2);transition:background .18s,color .18s,box-shadow .18s;
+  }
+  .seg button:hover{color:var(--text)}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink-deep);font-weight:600;box-shadow:0 1px 3px rgba(20,23,26,.14)}
+
+  /* ---------- layout ---------- */
+  main{
+    display:flex; gap:20px; align-items:flex-start;
+    max-width:1440px; margin:0 auto;
+    padding:calc(var(--head-h) + 22px) 24px 40px;
+  }
+  .stage-col{flex:1;min-width:0;display:flex;flex-direction:column;gap:20px}
+
+  /* ---------- stage ---------- */
+  .stage{
+    position:relative; overflow:hidden; border-radius:18px;
+    min-height:520px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:26px; padding:48px 24px 40px;
+    border:1px solid var(--line-2);
+    transition:background .5s;
+    animation:rise .6s .08s cubic-bezier(.2,.7,.3,1) both;
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+  .stage[data-mode="ink"]{background:linear-gradient(150deg,#0A3D7A 0%,#0B63C5 55%,#082A55 100%);--glowA:rgba(120,180,255,.30);--glowB:rgba(8,26,58,.55);--cap:#C9D6E8;--capline:rgba(255,255,255,.22)}
+  .stage[data-mode="paper"]{background:linear-gradient(160deg,#FFFFFF 0%,#F4F5F7 60%,#E9EDF2 100%);--glowA:rgba(11,99,197,.10);--glowB:rgba(154,103,0,.07);--cap:#4E5661;--capline:#D3D8DE}
+  .stage[data-mode="night"]{background:linear-gradient(155deg,#14171A 0%,#1F2328 60%,#0D1117 100%);--glowA:rgba(11,99,197,.22);--glowB:rgba(26,127,55,.10);--cap:#9AA4B2;--capline:rgba(255,255,255,.16)}
+  .stage .glow{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none}
+  .stage .glow.a{width:520px;height:520px;left:-120px;top:-160px;background:radial-gradient(circle,var(--glowA),transparent 70%);animation:driftA 22s ease-in-out infinite alternate}
+  .stage .glow.b{width:620px;height:620px;right:-180px;bottom:-220px;background:radial-gradient(circle,var(--glowB),transparent 70%);animation:driftB 26s ease-in-out infinite alternate}
+  @keyframes driftA{from{transform:translate(0,0)}to{transform:translate(90px,60px)}}
+  @keyframes driftB{from{transform:translate(0,0)}to{transform:translate(-80px,-50px)}}
+  .stage::after{
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:.055; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .stage-icon{
+    position:relative; z-index:2; width:min(340px,62vw); aspect-ratio:1;
+    filter:drop-shadow(0 24px 48px rgba(4,18,38,.45));
+    animation:pop .7s .2s cubic-bezier(.2,.8,.3,1.1) both;
+    transition:transform .3s cubic-bezier(.2,.7,.3,1);
+  }
+  .stage-icon:hover{transform:translateY(-6px) scale(1.015)}
+  @keyframes pop{from{opacity:0;transform:scale(.9) translateY(14px)}to{opacity:1;transform:scale(1) translateY(0)}}
+  .stage-icon svg{width:100%;height:100%;display:block}
+  .stage-cap{position:relative;z-index:2;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:14px;color:var(--cap);font-size:14px;letter-spacing:.06em}
+  .stage-cap .chip{display:inline-flex;align-items:center;gap:7px;padding:3px 12px;border:1px solid var(--capline);border-radius:999px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .stage-cap .dot{width:11px;height:11px;border-radius:3px;background:var(--ink);box-shadow:0 0 0 1px rgba(255,255,255,.35) inset}
+
+  /* ---------- ladder ---------- */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:22px 24px;animation:rise .6s .16s cubic-bezier(.2,.7,.3,1) both}
+  .panel h2{font-family:var(--serif);font-size:19px;font-weight:700;display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .panel h2::before{content:"";width:4px;height:18px;border-radius:2px;background:var(--ink)}
+  .panel h2 small{font-family:var(--sans);font-size:13px;font-weight:400;color:var(--text-3);letter-spacing:.05em}
+  .ladder{display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap}
+  .rung{display:flex;flex-direction:column;align-items:center;gap:9px}
+  .rung .box{display:flex;align-items:center;justify-content:center;background:
+    repeating-conic-gradient(#F1F3F6 0% 25%, #FFFFFF 0% 50%) 0 0/16px 16px;
+    border:1px solid var(--line);border-radius:8px;padding:8px}
+  .rung img{display:block;image-rendering:auto}
+  .rung span{font-size:13px;color:var(--text-3);font-variant-numeric:tabular-nums}
+
+  /* ---------- contexts ---------- */
+  .contexts{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .ctx{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .ctx figcaption{font-size:13px;color:var(--text-3);padding:8px 14px;background:var(--band);border-top:1px solid var(--line);letter-spacing:.05em}
+  .titlebar{display:flex;align-items:center;gap:10px;background:var(--surface);padding:10px 14px}
+  .titlebar img{width:18px;height:18px}
+  .titlebar .t{font-size:14px;color:var(--text-2)}
+  .titlebar .dots{margin-left:auto;display:flex;gap:8px}
+  .titlebar .dots i{width:11px;height:11px;border-radius:50%;background:#E7E9ED}
+  .titlebar .dots i:last-child{background:#F3C9C4}
+  .taskbar{display:flex;align-items:center;gap:14px;background:var(--scrim);padding:11px 16px}
+  .taskbar .ph{width:24px;height:24px;border-radius:6px;background:#3A414B}
+  .taskbar .ph.sq{border-radius:4px;background:#4A525E}
+  .taskbar .ph.rd{border-radius:50%;background:#33506E}
+  .taskbar img{width:26px;height:26px;filter:drop-shadow(0 0 6px rgba(11,99,197,.6))}
+  .taskbar .clock{margin-left:auto;font-size:12px;color:#9AA4B2;font-variant-numeric:tabular-nums}
+  .desktop{display:flex;align-items:flex-start;gap:20px;background:linear-gradient(150deg,#E9EDF2,#DDE3EA);padding:18px 16px}
+  .shortcut{display:flex;flex-direction:column;align-items:center;gap:6px;width:86px;padding:8px 4px;border-radius:8px}
+  .shortcut.sel{background:rgba(11,99,197,.14);outline:1px solid rgba(11,99,197,.4)}
+  .shortcut img{width:46px;height:46px;filter:drop-shadow(0 3px 5px rgba(20,23,26,.28))}
+  .shortcut span{font-size:12.5px;color:var(--text);text-align:center;line-height:1.35;text-shadow:0 1px 0 rgba(255,255,255,.7)}
+  .shortcut.ghost img{opacity:.85}
+
+  /* ---------- control rail ---------- */
+  .rail{
+    width:var(--rail-w); flex:none; position:sticky; top:calc(var(--head-h) + 22px);
+    max-height:calc(100vh - var(--head-h) - 44px);
+    display:flex; flex-direction:column;
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
+    animation:rise .6s .24s cubic-bezier(.2,.7,.3,1) both;
+  }
+  .rail-scroll{overflow-y:auto;padding:20px 22px 8px;overscroll-behavior:contain}
+  .rail-scroll::-webkit-scrollbar-track{background:var(--surface);border-radius:0 16px 0 0}
+  .rail-scroll::-webkit-scrollbar-thumb{border-color:var(--surface)}
+  .grp{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--line)}
+  .grp:last-child{border-bottom:none;margin-bottom:4px}
+  .grp h3{font-family:var(--serif);font-size:17.5px;font-weight:700;margin-bottom:14px;display:flex;align-items:baseline;gap:8px}
+  .grp h3 em{font-style:normal;font-family:var(--sans);font-size:12px;color:var(--text-3);letter-spacing:.1em}
+  .ctl{margin-bottom:14px}
+  .ctl:last-child{margin-bottom:2px}
+  .ctl .lab{display:flex;justify-content:space-between;align-items:center;font-size:14.5px;color:var(--text-2);margin-bottom:7px}
+  .ctl .lab output{font-size:13px;color:var(--ink-deep);background:var(--ink-soft);border-radius:5px;padding:1px 8px;font-variant-numeric:tabular-nums;min-width:44px;text-align:center}
+
+  input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:22px;background:transparent;cursor:pointer}
+  input[type="range"]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--ink) var(--fill,50%),#E7E9ED var(--fill,50%))}
+  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:17px;height:17px;border-radius:50%;background:var(--surface);border:2.5px solid var(--ink);margin-top:-6.5px;box-shadow:0 1px 4px rgba(8,49,95,.3);transition:transform .15s}
+  input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.15)}
+  input[type="range"]::-moz-range-track{height:4px;border-radius:2px;background:#E7E9ED}
+  input[type="range"]::-moz-range-progress{height:4px;border-radius:2px;background:var(--ink)}
+  input[type="range"]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--surface);border:2.5px solid var(--ink);box-shadow:0 1px 4px rgba(8,49,95,.3)}
+
+  .swatches{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .swatch{width:27px;height:27px;border-radius:8px;border:1px solid rgba(20,23,26,.15);cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative}
+  .swatch:hover{transform:translateY(-2px)}
+  .swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--ink)}
+  .pickwrap{position:relative;width:27px;height:27px;border-radius:8px;overflow:hidden;border:1px dashed var(--line-2);flex:none}
+  .pickwrap input[type="color"]{position:absolute;inset:-8px;width:44px;height:44px;border:none;padding:0;cursor:pointer;background:none}
+  .pickwrap::after{content:"+";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--text-3);pointer-events:none}
+
+  .switchrow{display:flex;justify-content:space-between;align-items:center;font-size:14.5px;color:var(--text-2);padding:5px 0}
+  .switch{position:relative;width:40px;height:22px;flex:none;cursor:pointer}
+  .switch input{position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;margin:0}
+  .switch i{position:absolute;inset:0;border-radius:999px;background:#D3D8DE;transition:background .2s;pointer-events:none}
+  .switch i::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(20,23,26,.3);transition:transform .2s cubic-bezier(.2,.7,.3,1.3)}
+  .switch input:checked + i{background:var(--ink)}
+  .switch input:checked + i::after{transform:translateX(18px)}
+  .switch input:focus-visible + i{outline:2px solid var(--ink);outline-offset:2px}
+
+  .stepper{display:flex;align-items:center;gap:0;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;width:max-content}
+  .stepper button{width:34px;height:32px;border:none;background:var(--band);font-size:17px;color:var(--text-2);cursor:pointer;transition:background .15s,color .15s}
+  .stepper button:hover{background:var(--ink-soft);color:var(--ink-deep)}
+  .stepper button:disabled{opacity:.35;cursor:default}
+  .stepper output{width:44px;text-align:center;font-size:15px;font-variant-numeric:tabular-nums;border-left:1px solid var(--line);border-right:1px solid var(--line);line-height:32px}
+
+  .rail-foot{border-top:1px solid var(--line);padding:16px 22px 18px;background:var(--band);border-radius:0 0 16px 16px}
+  .btnrow{display:flex;gap:9px;margin-bottom:10px}
+  .btn{
+    font:inherit;font-size:14.5px;font-weight:600;cursor:pointer;border-radius:9px;
+    padding:8px 14px;border:1px solid var(--line-2);background:var(--surface);color:var(--text);
+    transition:background .16s,border-color .16s,color .16s,transform .1s;
+    display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:1;white-space:nowrap;
+  }
+  .btn:hover{border-color:var(--ink);color:var(--ink-deep);background:var(--ink-soft)}
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+  .btn.primary:hover{background:var(--ink-hover);border-color:var(--ink-hover);color:#fff}
+  .btn svg{width:15px;height:15px;flex:none}
+  .exportrow{display:flex;gap:9px}
+  .exportrow select{
+    font:inherit;font-size:14px;border:1px solid var(--line-2);border-radius:9px;background:var(--surface);
+    color:var(--text);padding:0 8px;cursor:pointer;width:88px;flex:none;
+  }
+  .hint{font-size:12.5px;color:var(--text-3);margin-top:10px;line-height:1.5}
+
+  footer{max-width:1440px;margin:0 auto;padding:0 24px 34px;font-size:13.5px;color:var(--text-3)}
+  footer code{font-family:Consolas,monospace;font-size:12.5px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:1px 7px;color:var(--text-2)}
+
+  /* ---------- toast ---------- */
+  #toast{
+    position:fixed;left:50%;bottom:26px;transform:translate(-50%,16px);z-index:99;
+    background:var(--scrim);color:#fff;font-size:14.5px;padding:9px 20px;border-radius:10px;
+    box-shadow:0 8px 24px rgba(20,23,26,.35);opacity:0;pointer-events:none;
+    transition:opacity .25s,transform .25s;max-width:88vw;text-align:center;
+  }
+  #toast.show{opacity:1;transform:translate(-50%,0)}
+  #toast.err{background:var(--block)}
+
+  @media (max-width:1020px){
+    main{flex-direction:column}
+    .rail{width:100%;position:static;max-height:none}
+    .stage{min-height:440px}
+    .contexts{grid-template-columns:1fr}
+  }
+  @media (max-width:560px){
+    header{padding:0 14px;gap:10px}
+    .brand small{display:none}
+    .brand h1{font-size:18px}
+    .seg button{padding:4px 10px;font-size:13px}
+    main{padding:calc(var(--head-h) + 14px) 14px 28px}
+    .ladder{gap:16px}
+    .btnrow{flex-wrap:wrap}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mini" id="miniIcon" aria-hidden="true"></span>
+    <h1>图标工坊</h1>
+    <small>deai-writing · 刀锋过处，机器文断</small>
+  </div>
+  <div class="head-spacer"></div>
+  <div class="seg" role="group" aria-label="展台背景">
+    <button type="button" data-stage="ink" aria-pressed="true">墨池</button>
+    <button type="button" data-stage="paper" aria-pressed="false">纸面</button>
+    <button type="button" data-stage="night" aria-pressed="false">玄夜</button>
+  </div>
+</header>
+
+<main>
+  <div class="stage-col">
+    <section class="stage" id="stage" data-mode="ink" aria-label="图标预览">
+      <div class="glow a"></div><div class="glow b"></div>
+      <div class="stage-icon" id="stageIcon"></div>
+      <div class="stage-cap">
+        <span class="chip"><span class="dot" id="inkDot"></span><span id="inkHex">#6D4AC8</span></span>
+        <span class="chip">512 × 512 · SVG</span>
+        <span class="chip" id="paramCap">斩角 -26° · 裂口 16 · 错位 12</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>尺寸阶梯 <small>同一份矢量，逐档实渲染</small></h2>
+      <div class="ladder" id="ladder"></div>
+    </section>
+
+    <section class="panel">
+      <h2>落地场景 <small>标题栏 · 任务栏 · 桌面快捷方式</small></h2>
+      <div class="contexts">
+        <figure class="ctx">
+          <div class="titlebar">
+            <img id="ctxTitle" alt="标题栏图标">
+            <span class="t">降AI工作台 — 未命名文稿</span>
+            <span class="dots"><i></i><i></i><i></i></span>
+          </div>
+          <figcaption>应用标题栏 · 18 px</figcaption>
+        </figure>
+        <figure class="ctx">
+          <div class="taskbar">
+            <span class="ph"></span><span class="ph sq"></span>
+            <img id="ctxTask" alt="任务栏图标">
+            <span class="ph rd"></span><span class="ph"></span>
+            <span class="clock">21:36</span>
+          </div>
+          <figcaption>系统任务栏 · 26 px</figcaption>
+        </figure>
+        <figure class="ctx" style="grid-column:1/-1">
+          <div class="desktop">
+            <div class="shortcut sel"><img id="ctxDesk" alt="桌面图标"><span>降AI工作台</span></div>
+            <div class="shortcut ghost"><img id="ctxDesk2" alt="桌面图标（未选中）"><span>降AI工作台</span></div>
+          </div>
+          <figcaption>桌面快捷方式 · 46 px，左为选中态</figcaption>
+        </figure>
+      </div>
+    </section>
+  </div>
+
+  <aside class="rail" aria-label="图标参数">
+    <div class="rail-scroll">
+
+      <div class="grp">
+        <h3>笔墨 <em>INK</em></h3>
+        <div class="ctl">
+          <div class="lab"><span>墨色</span><output id="oInk">#6D4AC8</output></div>
+          <div class="swatches" id="swatches">
+            <button type="button" class="swatch" data-c="#0B63C5" style="background:#0B63C5" aria-label="墨蓝" aria-pressed="false"></button>
+            <button type="button" class="swatch" data-c="#0E7490" style="background:#0E7490" aria-label="黛青" aria-pressed="false"></button>
+            <button type="button" class="swatch" data-c="#1A7F37" style="background:#1A7F37" aria-label="松绿" aria-pressed="false"></button>
+            <button type="button" class="swatch" data-c="#6D4AC8" style="background:#6D4AC8" aria-label="紫毫" aria-pressed="true"></button>
+            <button type="button" class="swatch" data-c="#B42318" style="background:#B42318" aria-label="朱砂" aria-pressed="false"></button>
+            <button type="button" class="swatch" data-c="#1F2937" style="background:#1F2937" aria-label="玄墨" aria-pressed="false"></button>
+            <span class="pickwrap" title="自定墨色"><input type="color" id="inkPick" value="#6D4AC8" aria-label="自定墨色"></span>
+          </div>
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>刀锋粗细</span><output id="oWeight">1.00</output></div>
+          <input type="range" id="weight" min="0.6" max="1.5" step="0.01" value="1">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>收锋势</span><output id="oTaper">1.05</output></div>
+          <input type="range" id="taper" min="0.6" max="1.8" step="0.01" value="1.05">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>字块大小</span><output id="oGlyph">1.01</output></div>
+          <input type="range" id="glyph" min="0.8" max="1.15" step="0.01" value="1.01">
+        </div>
+        <div class="switchrow"><span>墨色渐变</span><label class="switch"><input type="checkbox" id="grad" checked><i></i></label></div>
+      </div>
+
+      <div class="grp">
+        <h3>纸面 <em>PAPER</em></h3>
+        <div class="switchrow"><span>底纸</span><label class="switch"><input type="checkbox" id="bg" checked><i></i></label></div>
+        <div class="ctl">
+          <div class="lab"><span>纸色深浅</span><output id="oPaper">55</output></div>
+          <input type="range" id="paper" min="0" max="100" step="1" value="55">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>圆角</span><output id="oRadius">112</output></div>
+          <input type="range" id="radius" min="0" max="256" step="2" value="112">
+        </div>
+        <div class="switchrow"><span>纸边描线</span><label class="switch"><input type="checkbox" id="border" checked><i></i></label></div>
+        <div class="switchrow"><span>字块纸衬</span><label class="switch"><input type="checkbox" id="halo" checked><i></i></label></div>
+      </div>
+
+      <div class="grp">
+        <h3>斩击 <em>SLASH</em></h3>
+        <div class="ctl">
+          <div class="lab"><span>斩角</span><output id="oAngle">-26°</output></div>
+          <input type="range" id="angle" min="-45" max="-12" step="1" value="-26">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>裂口</span><output id="oGap">16</output></div>
+          <input type="range" id="gap" min="4" max="28" step="1" value="16">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>错位</span><output id="oSlide">12</output></div>
+          <input type="range" id="slide" min="0" max="24" step="1" value="12">
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>碎屑</span></div>
+          <div class="stepper">
+            <button type="button" id="shardMinus" aria-label="减少一枚碎屑">−</button>
+            <output id="oShards">3</output>
+            <button type="button" id="shardPlus" aria-label="增加一枚碎屑">+</button>
+          </div>
+        </div>
+        <div class="ctl">
+          <div class="lab"><span>字色深浅</span><output id="oTone">85</output></div>
+          <input type="range" id="tone" min="20" max="100" step="1" value="85">
+        </div>
+      </div>
+
+    </div>
+    <div class="rail-foot">
+      <div class="btnrow">
+        <button type="button" class="btn" id="resetBtn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 1.8v3h3"/></svg>
+          重置
+        </button>
+        <button type="button" class="btn" id="randBtn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.8" y="1.8" width="12.4" height="12.4" rx="2.6"/><circle cx="5.4" cy="5.4" r="1" fill="currentColor" stroke="none"/><circle cx="10.6" cy="10.6" r="1" fill="currentColor" stroke="none"/><circle cx="10.6" cy="5.4" r="1" fill="currentColor" stroke="none"/><circle cx="5.4" cy="10.6" r="1" fill="currentColor" stroke="none"/></svg>
+          随机
+        </button>
+        <button type="button" class="btn" id="copyBtn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5.2" y="5.2" width="8.6" height="8.6" rx="1.8"/><path d="M10.8 5.2V3.6a1.8 1.8 0 0 0-1.8-1.8H3.6a1.8 1.8 0 0 0-1.8 1.8v5.4a1.8 1.8 0 0 0 1.8 1.8h1.6"/></svg>
+          复制 SVG
+        </button>
+      </div>
+      <div class="exportrow">
+        <button type="button" class="btn primary" id="svgBtn">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8m0 0 3-3M8 10 5 7M2.5 13.5h11"/></svg>
+          SVG
+        </button>
+        <select id="pngSize" aria-label="PNG 尺寸">
+          <option>16</option><option>32</option><option>48</option><option>64</option><option>128</option><option>256</option><option selected>512</option><option>1024</option>
+        </select>
+        <button type="button" class="btn primary" id="pngBtn">PNG</button>
+        <button type="button" class="btn primary" id="icoBtn" title="含 16 / 24 / 32 / 48 / 64 / 128 / 256 七档">ICO</button>
+      </div>
+      <p class="hint">导出均为当前参数的实时状态。ICO 内嵌七档 PNG，Windows 资源管理器与 Qt 均可直接读取。</p>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  仓库资产：<code>desktop/deai_app/assets/icon.svg</code> · 概念：几何「AI」字块被一道刀锋斜斩两断，裂口错位、刃光崩屑 —— 去 AI 味，是下刀斩掉机器腔。
+</footer>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ============ state ============ */
+const DEFAULTS = {
+  ink:"#6D4AC8", weight:1, taper:1.05, glyph:1.01,
+  paper:55, radius:112, angle:-26, gap:16, slide:12, shards:3, tone:85,
+  bg:true, border:true, grad:true, halo:true
+};
+let S = {...DEFAULTS};
+
+/* ============ color helpers ============ */
+function hexToHsl(hex){
+  const n = parseInt(hex.slice(1),16);
+  let r=((n>>16)&255)/255, g=((n>>8)&255)/255, b=(n&255)/255;
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b); let h=0,s=0,l=(mx+mn)/2;
+  if(mx!==mn){
+    const d=mx-mn;
+    s = l>0.5 ? d/(2-mx-mn) : d/(mx+mn);
+    if(mx===r) h=((g-b)/d+(g<b?6:0));
+    else if(mx===g) h=(b-r)/d+2;
+    else h=(r-g)/d+4;
+    h*=60;
+  }
+  return [h,s*100,l*100];
+}
+function hslToHex(h,s,l){
+  s/=100; l/=100;
+  const k=n=>(n+h/30)%12;
+  const a=s*Math.min(l,1-l);
+  const f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));
+  const to=x=>Math.round(x*255).toString(16).padStart(2,"0");
+  return "#"+to(f(0))+to(f(8))+to(f(4));
+}
+function shift(hex,dl,ds=0){
+  const [h,s,l]=hexToHsl(hex);
+  return hslToHex(h,Math.max(0,Math.min(100,s+ds)),Math.max(4,Math.min(96,l+dl)));
+}
+function mixWhite(hex,t){ // t: 0 -> hex-ish gray, 1 -> white
+  const n=parseInt(hex.slice(1),16);
+  const r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  const m=c=>Math.round(c+(255-c)*t);
+  return "#"+[m(r),m(g),m(b)].map(c=>c.toString(16).padStart(2,"0")).join("");
+}
+
+/* ============ brush geometry ============ */
+function cubic(p0,p1,p2,p3,t){
+  const u=1-t;
+  return [
+    u*u*u*p0[0]+3*u*u*t*p1[0]+3*u*t*t*p2[0]+t*t*t*p3[0],
+    u*u*u*p0[1]+3*u*u*t*p1[1]+3*u*t*t*p2[1]+t*t*t*p3[1]
+  ];
+}
+function dcubic(p0,p1,p2,p3,t){
+  const u=1-t;
+  return [
+    3*u*u*(p1[0]-p0[0])+6*u*t*(p2[0]-p1[0])+3*t*t*(p3[0]-p2[0]),
+    3*u*u*(p1[1]-p0[1])+6*u*t*(p2[1]-p1[1])+3*t*t*(p3[1]-p2[1])
+  ];
+}
+function brushPath(p0,p1,p2,p3,wfn,N=80){
+  const L=[],R=[];
+  for(let i=0;i<=N;i++){
+    const t=i/N;
+    const [cx,cy]=cubic(p0,p1,p2,p3,t);
+    const [dx,dy]=dcubic(p0,p1,p2,p3,t);
+    const len=Math.hypot(dx,dy)||1;
+    const nx=-dy/len, ny=dx/len, w=wfn(t)/2;
+    L.push([cx+nx*w,cy+ny*w]);
+    R.push([cx-nx*w,cy-ny*w]);
+  }
+  const f=p=>p[0].toFixed(2)+" "+p[1].toFixed(2);
+  let d="M"+f(L[0]);
+  for(let i=1;i<=N;i++) d+="L"+f(L[i]);
+  for(let i=N;i>=0;i--) d+="L"+f(R[i]);
+  return d+"Z";
+}
+/* ============ mark geometry: AI cleaved by a blade ============ */
+const LETTERS = "M194 146L238 146L300 366L256 366L245 326L187 326L176 366L132 366Z M216 192L236 282L196 282Z M330 146H380V366H330Z";
+function slashFrame(angle){
+  const a = angle*Math.PI/180;
+  const d = [Math.cos(a), Math.sin(a)];
+  const n = [-Math.sin(a), Math.cos(a)];
+  const c = [256,256];
+  const at = (along, side) => [c[0]+d[0]*along+n[0]*side, c[1]+d[1]*along+n[1]*side];
+  return {d,n,c,at};
+}
+function bladePaths(s){
+  const {d,n,c,at} = slashFrame(s.angle);
+  const p0 = at(-200,0), p3 = at(200,0);
+  const p1 = at(-60,-10), p2 = at(60,-6);
+  const blade = brushPath(p0,p1,p2,p3, t=>s.weight*(44-42*Math.pow(t,s.taper)));
+  const g0 = at(-180,-10), g3 = at(150,-10);
+  const g1 = at(-60,-19), g2 = at(60,-15);
+  const gleam = brushPath(g0,g1,g2,g3, t=>s.weight*6*(1-Math.pow(t,2)));
+  return {blade, gleam};
+}
+function shardPaths(s){
+  const {d,n,at} = slashFrame(s.angle);
+  let out = "";
+  for(let i=0;i<s.shards;i++){
+    const p = at(156+i*16, 10+i*7);
+    const sz = 18-i*2;
+    const tip = [p[0]+d[0]*sz, p[1]+d[1]*sz];
+    const b1 = [p[0]-d[0]*sz*0.4+n[0]*sz*0.5, p[1]-d[1]*sz*0.4+n[1]*sz*0.5];
+    const b2 = [p[0]-d[0]*sz*0.4-n[0]*sz*0.5, p[1]-d[1]*sz*0.4-n[1]*sz*0.5];
+    const f = q=>q[0].toFixed(1)+" "+q[1].toFixed(1);
+    out += `<path d="M${f(tip)}L${f(b1)}L${f(b2)}Z" transform="rotate(${i*17} ${p[0].toFixed(1)} ${p[1].toFixed(1)})"/>`;
+  }
+  return out;
+}
+
+/* ============ svg builder ============ */
+function buildSVG(s,size=512){
+  const {d,n,at} = slashFrame(s.angle);
+  const {blade,gleam} = bladePaths(s);
+  const paperBottom = mixWhite("#C9D2DD", 1 - s.paper/100*0.82);
+  const inkLight=shift(s.ink,11,4), inkDark=shift(s.ink,-13,2);
+  const inkFill = s.grad ? "url(#inkG)" : s.ink;
+  const gleamFill = mixWhite(s.ink, 0.55);
+  const letterFill = "#A9B2BF";
+  const tone = (s.tone/100).toFixed(2);
+  const half = s.gap/2;
+  const up = `translate(${(-n[0]*half-d[0]*s.slide).toFixed(2)} ${(-n[1]*half-d[1]*s.slide).toFixed(2)})`;
+  const dn = `translate(${(n[0]*half+d[0]*s.slide).toFixed(2)} ${(n[1]*half+d[1]*s.slide).toFixed(2)})`;
+  const clipUp = [at(-400,-400), at(400,-400), at(400,0), at(-400,0)].map(p=>p.map(v=>v.toFixed(1)).join(",")).join(" ");
+  const clipDn = [at(-400,0), at(400,0), at(400,400), at(-400,400)].map(p=>p.map(v=>v.toFixed(1)).join(",")).join(" ");
+  const scaleT = ` transform="translate(256 256) scale(${s.glyph.toFixed(3)}) translate(-256 -256)"`;
+  const haloUp = s.halo ? `<g clip-path="url(#cutUp)"><path d="${LETTERS}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="14" stroke-linejoin="round" transform="${up}"/></g>` : "";
+  const haloDn = s.halo ? `<g clip-path="url(#cutDn)"><path d="${LETTERS}" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="14" stroke-linejoin="round" transform="${dn}"/></g>` : "";
+  const bg = s.bg ? `<rect x="1" y="1" width="510" height="510" rx="${s.radius}" fill="url(#paperG)"${s.border?` stroke="#D3D8DE" stroke-width="2"`:""}/>` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">
+<defs>
+<linearGradient id="paperG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="${paperBottom}"/></linearGradient>
+<linearGradient id="inkG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${inkLight}"/><stop offset="0.5" stop-color="${s.ink}"/><stop offset="1" stop-color="${inkDark}"/></linearGradient>
+<clipPath id="cutUp"><polygon points="${clipUp}"/></clipPath>
+<clipPath id="cutDn"><polygon points="${clipDn}"/></clipPath>
+</defs>
+${bg}
+<g${scaleT}>
+${haloUp}${haloDn}
+<g fill="${letterFill}" fill-rule="evenodd" opacity="${tone}">
+<g clip-path="url(#cutUp)"><path d="${LETTERS}" transform="${up}"/></g>
+<g clip-path="url(#cutDn)"><path d="${LETTERS}" transform="${dn}"/></g>
+</g>
+<g fill="${letterFill}" opacity="${tone}">${shardPaths(s)}</g>
+<path id="bladeP" d="${blade}" fill="${inkFill}"/>
+<path id="gleamP" d="${gleam}" fill="${gleamFill}" opacity="0.85"/>
+</g>
+</svg>`;
+}
+const svgURL = s => "data:image/svg+xml;charset=utf-8,"+encodeURIComponent(buildSVG(s));
+
+/* ============ dom refs ============ */
+const $=id=>document.getElementById(id);
+const stageIcon=$("stageIcon"), miniIcon=$("miniIcon"), ladder=$("ladder");
+const LADDER=[16,24,32,48,64,128];
+LADDER.forEach(px=>{
+  const d=document.createElement("div");
+  d.className="rung";
+  d.innerHTML=`<span class="box"><img width="${px}" height="${px}" alt="${px} 像素预览"></span><span>${px} px</span>`;
+  ladder.appendChild(d);
+});
+const ladderImgs=[...ladder.querySelectorAll("img")];
+const ctxImgs=[$("ctxTitle"),$("ctxTask"),$("ctxDesk"),$("ctxDesk2")];
+
+/* ============ render ============ */
+let raf=0;
+function render(){
+  cancelAnimationFrame(raf);
+  raf=requestAnimationFrame(()=>{
+    stageIcon.innerHTML=buildSVG(S);
+    miniIcon.innerHTML=buildSVG(S,30);
+    const url=svgURL(S);
+    ladderImgs.forEach(im=>im.src=url);
+    ctxImgs.forEach(im=>im.src=url);
+    $("inkDot").style.background=S.ink;
+    $("inkHex").textContent=S.ink.toUpperCase();
+    $("oInk").textContent=S.ink.toUpperCase();
+    $("paramCap").textContent = `斩角 ${S.angle}° · 裂口 ${S.gap} · 错位 ${S.slide}`;
+    document.querySelectorAll(".swatch").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.c.toLowerCase()===S.ink.toLowerCase())));
+    writeHash();
+  });
+}
+function fillTrack(el){
+  const min=+el.min,max=+el.max,v=+el.value;
+  el.style.setProperty("--fill",((v-min)/(max-min)*100).toFixed(1)+"%");
+}
+
+/* ============ controls wiring ============ */
+function bindRange(id,key,fmt,outId){
+  const el=$(id),out=$(outId);
+  const upd=()=>{S[key]=+el.value;out.textContent=fmt(+el.value);fillTrack(el);render();};
+  el.addEventListener("input",upd);
+  fillTrack(el);
+}
+bindRange("weight","weight",v=>v.toFixed(2),"oWeight");
+bindRange("taper","taper",v=>v.toFixed(2),"oTaper");
+bindRange("glyph","glyph",v=>v.toFixed(2),"oGlyph");
+bindRange("paper","paper",v=>String(v),"oPaper");
+bindRange("radius","radius",v=>String(v),"oRadius");
+bindRange("angle","angle",v=>v+"°","oAngle");
+bindRange("gap","gap",v=>String(v),"oGap");
+bindRange("slide","slide",v=>String(v),"oSlide");
+bindRange("tone","tone",v=>String(v),"oTone");
+
+function bindSwitch(id,key){
+  const el=$(id);
+  el.addEventListener("change",()=>{S[key]=el.checked;render();});
+}
+bindSwitch("bg","bg");bindSwitch("border","border");bindSwitch("grad","grad");bindSwitch("halo","halo");
+
+function setShards(n){
+  S.shards=Math.max(0,Math.min(6,n));
+  $("oShards").textContent=S.shards;
+  $("shardMinus").disabled=S.shards===0;
+  $("shardPlus").disabled=S.shards===6;
+  render();
+}
+$("shardMinus").addEventListener("click",()=>setShards(S.shards-1));
+$("shardPlus").addEventListener("click",()=>setShards(S.shards+1));
+
+function setInk(c){
+  S.ink=c;
+  $("inkPick").value=c;
+  render();
+}
+document.querySelectorAll(".swatch").forEach(b=>b.addEventListener("click",()=>setInk(b.dataset.c)));
+$("inkPick").addEventListener("input",e=>setInk(e.target.value));
+
+/* stage mode */
+document.querySelectorAll("[data-stage]").forEach(b=>b.addEventListener("click",()=>{
+  $("stage").dataset.mode=b.dataset.stage;
+  document.querySelectorAll("[data-stage]").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));
+}));
+
+/* sync all controls from state */
+function syncUI(){
+  $("weight").value=S.weight; $("oWeight").textContent=S.weight.toFixed(2);
+  $("taper").value=S.taper; $("oTaper").textContent=S.taper.toFixed(2);
+  $("glyph").value=S.glyph; $("oGlyph").textContent=S.glyph.toFixed(2);
+  $("paper").value=S.paper; $("oPaper").textContent=S.paper;
+  $("radius").value=S.radius; $("oRadius").textContent=S.radius;
+  $("angle").value=S.angle; $("oAngle").textContent=S.angle+"°";
+  $("gap").value=S.gap; $("oGap").textContent=S.gap;
+  $("slide").value=S.slide; $("oSlide").textContent=S.slide;
+  $("tone").value=S.tone; $("oTone").textContent=S.tone;
+  ["weight","taper","glyph","paper","radius","angle","gap","slide","tone"].forEach(id=>fillTrack($(id)));
+  $("bg").checked=S.bg;$("border").checked=S.border;$("grad").checked=S.grad;$("halo").checked=S.halo;
+  $("inkPick").value=S.ink;
+  setShards(S.shards);
+}
+$("resetBtn").addEventListener("click",()=>{S={...DEFAULTS};syncUI();toast("已回到默认笔墨");});
+$("randBtn").addEventListener("click",()=>{
+  const pool=["#0B63C5","#0E7490","#1A7F37","#6D4AC8","#B42318","#1F2937","#9A6700"];
+  const r=(a,b)=>a+Math.random()*(b-a);
+  S={...S,
+    ink:pool[Math.floor(Math.random()*pool.length)],
+    weight:+r(0.8,1.3).toFixed(2), taper:+r(0.7,1.6).toFixed(2),
+    glyph:+r(0.9,1.1).toFixed(2), radius:Math.round(r(64,200)/2)*2,
+    angle:Math.round(r(-40,-16)), gap:Math.round(r(8,24)), slide:Math.round(r(6,18)),
+    shards:Math.floor(Math.random()*6), paper:Math.round(r(30,80)),
+    tone:Math.round(r(55,100))
+  };
+  syncUI();toast("随机落墨一副");
+});
+
+/* ============ export ============ */
+function toast(msg,err=false){
+  const t=$("toast");
+  t.textContent=msg;t.classList.toggle("err",err);t.classList.add("show");
+  clearTimeout(toast._t);
+  toast._t=setTimeout(()=>t.classList.remove("show"),2400);
+}
+function download(blob,name){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download=name;
+  a.style.display="none";
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href);},60000);
+}
+$("svgBtn").addEventListener("click",()=>{
+  download(new Blob([buildSVG(S)],{type:"image/svg+xml"}),"deai-writing.svg");
+  toast("SVG 已导出（当前参数）");
+});
+$("copyBtn").addEventListener("click",async()=>{
+  const text=buildSVG(S);
+  let ok=false;
+  try{
+    await Promise.race([
+      navigator.clipboard.writeText(text),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error("clipboard timeout")),1200))
+    ]);
+    ok=true;
+  }catch(e){
+    const ta=document.createElement("textarea");
+    ta.value=text;ta.style.position="fixed";ta.style.opacity="0";
+    document.body.appendChild(ta);ta.select();
+    ok=document.execCommand("copy");ta.remove();
+  }
+  toast(ok?"SVG 源码已复制":"复制失败，请改用下载",!ok);
+});
+function renderPNG(size){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.createElement("canvas");
+      c.width=c.height=size;
+      const ctx=c.getContext("2d");
+      ctx.drawImage(img,0,0,size,size);
+      c.toBlob(b=>b?res(b):rej(new Error("toBlob 失败")),"image/png");
+    };
+    img.onerror=()=>rej(new Error("SVG 解码失败"));
+    img.src=svgURL(S);
+  });
+}
+$("pngBtn").addEventListener("click",async()=>{
+  const size=+$("pngSize").value;
+  try{
+    const b=await renderPNG(size);
+    download(b,`deai-writing-${size}.png`);
+    toast(`PNG ${size} × ${size} 已导出`);
+  }catch(e){toast("PNG 导出失败："+e.message,true);}
+});
+$("icoBtn").addEventListener("click",async()=>{
+  const sizes=[16,24,32,48,64,128,256];
+  try{
+    const pngs=await Promise.all(sizes.map(async s=>new Uint8Array(await (await renderPNG(s)).arrayBuffer())));
+    const count=sizes.length;
+    const header=6+16*count;
+    let total=header; pngs.forEach(p=>total+=p.length);
+    const buf=new Uint8Array(total);
+    const dv=new DataView(buf.buffer);
+    dv.setUint16(0,0,true);dv.setUint16(2,1,true);dv.setUint16(4,count,true);
+    let off=header;
+    sizes.forEach((s,i)=>{
+      const e=6+16*i;
+      buf[e]=s>=256?0:s; buf[e+1]=s>=256?0:s;
+      buf[e+2]=0;buf[e+3]=0;
+      dv.setUint16(e+4,1,true);dv.setUint16(e+6,32,true);
+      dv.setUint32(e+8,pngs[i].length,true);dv.setUint32(e+12,off,true);
+      buf.set(pngs[i],off);off+=pngs[i].length;
+    });
+    download(new Blob([buf],{type:"image/x-icon"}),"deai-writing.ico");
+    toast("ICO 已导出，含 16–256 七档");
+  }catch(e){toast("ICO 导出失败："+e.message,true);}
+});
+
+/* ============ shareable state (url hash) ============ */
+const NUM_KEYS={weight:[0.6,1.5],taper:[0.6,1.8],glyph:[0.8,1.15],paper:[0,100],radius:[0,256],angle:[-45,-12],gap:[4,28],slide:[0,24],tone:[20,100],shards:[0,6]};
+const BOOL_KEYS=["bg","border","grad","halo"];
+function writeHash(){
+  const p=new URLSearchParams();
+  p.set("ink",S.ink);
+  for(const k in NUM_KEYS) p.set(k,String(S[k]));
+  BOOL_KEYS.forEach(k=>p.set(k,S[k]?"1":"0"));
+  history.replaceState(null,"","#"+p.toString());
+}
+function readHash(){
+  if(!location.hash.slice(1)) return;
+  const p=new URLSearchParams(location.hash.slice(1));
+  const ink=p.get("ink");
+  if(ink && /^#[0-9a-fA-F]{6}$/.test(ink)) S.ink=ink.toUpperCase();
+  for(const k in NUM_KEYS){
+    const v=parseFloat(p.get(k));
+    if(Number.isFinite(v)){
+      const [a,b]=NUM_KEYS[k];
+      S[k]= k==="shards"||k==="paper"||k==="radius"||k==="tone"||k==="angle"||k==="gap"||k==="slide"
+        ? Math.round(Math.max(a,Math.min(b,v)))
+        : +Math.max(a,Math.min(b,v)).toFixed(2);
+    }
+  }
+  BOOL_KEYS.forEach(k=>{
+    const v=p.get(k);
+    if(v==="0"||v==="1") S[k]=v==="1";
+  });
+}
+
+/* ============ boot ============ */
+readHash();
+syncUI();
+</script>
+</body>
+</html>
