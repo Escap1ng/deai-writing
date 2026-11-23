@@ -58,7 +58,7 @@ class SettingsDialog(QDialog):
         self._placed = False
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(12, 12, 12, 12)
+        outer.setContentsMargins(14, 14, 14, 14)
         card = QFrame(); card.setObjectName("dialogCard")
         shadow = QGraphicsDropShadowEffect(blurRadius=int(theme.shell("shadow_blur")),
                                            xOffset=0, yOffset=int(theme.shell("shadow_y")))
@@ -69,7 +69,7 @@ class SettingsDialog(QDialog):
         outer.addWidget(card)
 
         column = QVBoxLayout(card)
-        column.setContentsMargins(22, 16, 22, 16)
+        column.setContentsMargins(26, 20, 26, 18)
         column.setSpacing(12)
 
         column.addWidget(self._build_title())
@@ -129,7 +129,7 @@ class SettingsDialog(QDialog):
 
     def _build_provider_form(self) -> QFormLayout:
         form = QFormLayout()
-        form.setHorizontalSpacing(14); form.setVerticalSpacing(9)
+        form.setHorizontalSpacing(16); form.setVerticalSpacing(9)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
 
@@ -179,7 +179,7 @@ class SettingsDialog(QDialog):
 
     def _build_rewrite_form(self) -> QFormLayout:
         form = QFormLayout()
-        form.setHorizontalSpacing(14); form.setVerticalSpacing(9)
+        form.setHorizontalSpacing(16); form.setVerticalSpacing(9)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.preset = QComboBox(); self.preset.addItems(prompt.PRESETS)

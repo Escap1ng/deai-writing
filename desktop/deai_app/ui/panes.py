@@ -57,9 +57,9 @@ class Pane(QFrame):
         if drop_suffixes is not None:
             self.setAcceptDrops(True)
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(int(theme.shell("content_padding")), 12,
+        outer.setContentsMargins(int(theme.shell("content_padding")), 14,
                                  int(theme.shell("content_padding")), 0)
-        outer.setSpacing(8)
+        outer.setSpacing(10)
 
         head = QHBoxLayout(); head.setSpacing(6)
         # 标题与正文首字符同一条左缘线：头部再缩进一个 document_margin
@@ -168,7 +168,7 @@ class Pane(QFrame):
             f"#band {{ border-bottom-left-radius: {radius}px;"
             f" border-bottom-right-radius: {radius}px; }}")
         layout = QHBoxLayout(band)
-        layout.setContentsMargins(12, 8, 12, 10); layout.setSpacing(18)
+        layout.setContentsMargins(14, 9, 14, 12); layout.setSpacing(20)
         band.setFixedHeight(int(self.theme.shell("band_height")))
         self._band_layout = layout
         self.chips: list[tuple[QLabel, QLabel]] = []
@@ -184,7 +184,7 @@ class Pane(QFrame):
                 self.chips.append((dot, text))
         else:
             for name in ("命中", "风险", "门禁"):
-                column = QVBoxLayout(); column.setSpacing(0)
+                column = QVBoxLayout(); column.setSpacing(1)
                 number, label = QLabel("—"), QLabel(name)
                 number.setObjectName("metricNum"); label.setObjectName("metricLab")
                 number.setStyleSheet(f"color: {self.theme.color('text_muted')};")  # 未体检时别让三个长破折号变成黑杠
