@@ -16,7 +16,7 @@ from deai_app.ui import motion
 from deai_app.ui.theme import Theme
 
 INSET = 3
-RADIUS = 8
+RADIUS = 9
 
 
 class SegmentedControl(QWidget):
@@ -30,7 +30,7 @@ class SegmentedControl(QWidget):
         self.on_select = on_select
         self.compact = compact
         self.inset = 2 if compact else INSET
-        self.radius = 6 if compact else RADIUS
+        self.radius = 7 if compact else RADIUS
         self.font_size = theme.size("body") - (2.0 if compact else 0.5)
         self.min_width = 96 if compact else 220
         self.per_item = 26 if compact else 40
@@ -41,7 +41,7 @@ class SegmentedControl(QWidget):
         self._keyboard_focus = False
         self.setMouseTracking(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(26 if compact else 34)
+        self.setFixedHeight(26 if compact else 32)
         self.setMinimumWidth(self.min_width)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAccessibleName(accessible_name)
@@ -148,10 +148,20 @@ class SegmentedControl(QWidget):
     def paintEvent(self, event) -> None:  # noqa: N802
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        enabled = self.isEnabled()
         track = QRectF(0, 0, self.width(), self.height())
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(self.theme.color("segment_track")))
         painter.drawRoundedRect(track, self.radius, self.radius)
+
+        if enabled and self._hover >= 0 and self._hover != self._index:
+            hover = QRectF(self._pill_target(self._hover), self.inset,
+                           self._segment_width(), self.height() - self.inset * 2)
+            hover_color = QColor(self.theme.color("surface_hover"))
+            hover_color.setAlphaF(0.75)
+            painter.setBrush(hover_color)
+            painter.drawRoundedRect(hover, self.radius - self.inset + 1,
+                                    self.radius - self.inset + 1)
 
         pill = QRectF(self._pill, self.inset, self._segment_width(),
                       self.height() - self.inset * 2)
@@ -164,7 +174,9 @@ class SegmentedControl(QWidget):
             rect = QRect(int(self.inset + index * self._segment_width()), self.inset,
                          int(self._segment_width()), self.height() - self.inset * 2)
             selected = index == self._index
-            if selected:
+            if not enabled:
+                color = self.theme.color("text_muted")
+            elif selected:
                 color = self.theme.color("segment_text")
             elif index == self._hover:
                 color = self.theme.color("text")

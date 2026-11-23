@@ -116,10 +116,10 @@ def render_annotated_html(report: GateReport, source: str,
             block = []
     if block:
         paragraphs.append("<br>".join(block))
-    body = "".join(f'<p style="margin:0 0 10px 0;">{text}</p>' for text in paragraphs)
+    body = "".join(f'<p style="margin:0 0 12px 0;">{text}</p>' for text in paragraphs)
     return (
         f"<div style=\"font-family:'{theme.family('cjk')}';font-size:{theme.size('body')}pt;"
-        f"color:{theme.color('text')};line-height:150%;\">{body}</div>"
+        f"color:{theme.color('text')};line-height:155%;\">{body}</div>"
     )
 
 
@@ -142,10 +142,10 @@ def render_html(report: GateReport, source: str, theme: Theme | None = None,
         "head": f"font-size:{theme.size('title')}pt;font-weight:700;color:{c('text')};margin-top:2px",
         "sub": f"font-size:{theme.size('meta')}pt;color:{c('text_secondary')};margin-bottom:6px",
         "group": f"font-size:{theme.size('meta')}pt;font-weight:700;color:{c('text_muted')};"
-                 f"letter-spacing:1px;margin-top:16px;border-bottom:1px solid {c('divider')};padding-bottom:3px",
-        "item": f"font-size:{body}pt;color:{c('text')};margin-top:8px;line-height:150%",
-        "fix": f"font-size:{theme.size('meta')}pt;color:{c('text_muted')};margin-left:22px;line-height:145%",
-        "more": f"font-size:{theme.size('meta')}pt;color:{c('text_secondary')};margin-left:22px",
+                 f"letter-spacing:1px;margin-top:18px;border-bottom:1px solid {c('divider')};padding-bottom:4px",
+        "item": f"font-size:{body}pt;color:{c('text')};margin-top:9px;line-height:155%",
+        "fix": f"font-size:{theme.size('meta')}pt;color:{c('text_muted')};margin-left:24px;line-height:150%",
+        "more": f"font-size:{theme.size('meta')}pt;color:{c('focus_ring')};margin-left:24px",
         "note": f"font-size:{body}pt;color:{c('text_secondary')}",
     }
     link_style = f"color:{c('text')};text-decoration:none"

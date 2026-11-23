@@ -46,8 +46,8 @@ HINTS = {
     0: "Ctrl+Enter 改写 · Ctrl+O 载入",
     1: "Ctrl+Enter 翻译 · 译文默认再过降 AI",
 }
-INPUT_PLACEHOLDER = "把稿子贴在这里，或拖入 .md / .txt / .tex · Ctrl+Enter 开始"
-OUTPUT_PLACEHOLDER = "改写结果与体检报告出现在这里"
+INPUT_PLACEHOLDER = "贴稿、拖入 .md / .txt / .tex，Ctrl+Enter 开始"
+OUTPUT_PLACEHOLDER = "改写结果与体检报告会出现在这里"
 READ_SUFFIXES = {".md", ".txt", ".tex", ".bib", ".typ"}
 CAPTION_KINDS = ("min", "max", "close")
 #: 状态行兜底阈值：完成类消息（含门禁结论）最长约 54 字，必须留在状态行；
@@ -130,7 +130,7 @@ class CaptionButton(QToolButton):
             background.setAlphaF(self._hover)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(background)
-            painter.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), 6, 6)
+            painter.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), 8, 8)
         color = self.theme.color(
             "ink_fg" if (self.kind == "close" and self._hover > 0.5) else "text")
         pen = QPen(QColor(color))
@@ -156,25 +156,38 @@ def ensure_app(theme: Theme) -> QApplication:
     return app
 
 
+class ElidedLabel(QLabel):
+    """单行状态：宽度不够时右侧省略，全文留在 tooltip 与提示条里。"""
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt 命名
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        text = self.fontMetrics().elidedText(
+            self.text(), Qt.TextElideMode.ElideRight, self.width())
+        painter.drawText(self.rect(),
+                         Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
+        painter.end()
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        self.setToolTip(text if len(text) > 28 else "")
+
+
 class BrandMark(QWidget):
-    """品牌印记：朱砂底圆角方章 + 一道墨白横笔，QPainter 绘制，不用字形。"""
+    """品牌锚点：一条强调色竖线，与品牌文字并排，不再画小图形。"""
 
     def __init__(self, theme: Theme) -> None:
         super().__init__()
         self.theme = theme
-        self.setFixedSize(16, 16)
+        self.setFixedSize(3, 18)
 
     def paintEvent(self, event) -> None:  # noqa: N802 - Qt 命名
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(self.theme.color("ink_bg")))
-        painter.drawRoundedRect(QRectF(0, 0, 16, 16), 4, 4)
-        pen = QPen(QColor(self.theme.color("ink_fg")))
-        pen.setWidthF(2.0)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen)
-        painter.drawLine(QPointF(4.5, 8), QPointF(11.5, 8))
+        painter.drawRoundedRect(QRectF(0, 0, 3, 18), 1.5, 1.5)
         painter.end()
 
 
@@ -184,8 +197,8 @@ class TitleBar(QWidget):
         self.setFixedHeight(int(theme.shell("titlebar_height")))
         self.setStyleSheet("background: transparent;")
         row = QHBoxLayout(self)
-        # 左边距 = 栏内容边距 + 文档边距 - 印记占位（16 + 8），品牌文字仍与两栏标题同一条左缘线
-        row.setContentsMargins(int(theme.shell("content_padding")) + int(theme.shell("document_margin")) - 24,
+        # 左边距 = 栏内容边距 + 文档边距 - 印记占位（竖线 3 + 间距 8 - 1），品牌文字与两栏标题同左缘
+        row.setContentsMargins(int(theme.shell("content_padding")) + int(theme.shell("document_margin")) - 10,
                                0, 0, 0)
         row.setSpacing(4)
         brand_row = QHBoxLayout(); brand_row.setSpacing(8)
@@ -240,7 +253,8 @@ class DeaiApp(QWidget):
         outer.addWidget(card)
 
         column = QVBoxLayout(card)
-        column.setContentsMargins(margin, 10, margin - 4, 0); column.setSpacing(10)
+        pad = int(shell("content_padding"))
+        column.setContentsMargins(pad, 12, pad, 14); column.setSpacing(10)
         self.titlebar = TitleBar(self.theme, self._switch_mode, self.showMinimized,
                                  self.toggle_maximize, self.close)
         column.addWidget(self.titlebar)
@@ -271,7 +285,8 @@ class DeaiApp(QWidget):
         self.splitter.setSizes([1, 1])
         column.addWidget(self.splitter, 1)
 
-        banner_row = QHBoxLayout(); banner_row.setSpacing(6)
+        banner_row = QHBoxLayout(); banner_row.setSpacing(8)
+        banner_row.setContentsMargins(0, 0, 0, 0)
         self.banner = QLabel(""); self.banner.setObjectName("banner")
         self.banner.setWordWrap(True)
         banner_row.addWidget(self.banner, 1)
@@ -285,7 +300,8 @@ class DeaiApp(QWidget):
         self.banner_widget.hide()
         column.addWidget(self.banner_widget)
 
-        bar = QHBoxLayout(); bar.setSpacing(6)
+        bar = QHBoxLayout(); bar.setSpacing(8)
+        bar.setContentsMargins(0, 0, 0, 0)
         self.rewrite_button = QPushButton("AI 改写"); self.rewrite_button.setObjectName("ink")
         self.rewrite_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.rewrite_button.setToolTip("调用已配置的模型改写，并在每轮后跑本地三关（Ctrl+Enter）")
@@ -313,7 +329,7 @@ class DeaiApp(QWidget):
         bar.addWidget(self.provider_combo)
         bar.addStretch()
         self.busy_dot = QLabel(); self.busy_dot.setObjectName("busyDot")
-        self.busy_dot.setFixedSize(10, 10)
+        self.busy_dot.setFixedSize(8, 8)
         self.busy_dot.setToolTip("正在调用模型，等流式输出或按「停止生成」")
         self.busy_dot.hide()
         self._busy_animation = None
@@ -321,7 +337,7 @@ class DeaiApp(QWidget):
         self.progress_label = QLabel(""); self.progress_label.setObjectName("meta")
         self.progress_label.hide()
         bar.addWidget(self.progress_label)
-        self.status = QLabel(""); self.status.setObjectName("hint")
+        self.status = ElidedLabel(""); self.status.setObjectName("hint")
         self.status.setMinimumWidth(0)
         bar.addWidget(self.status)
         band = QWidget(); band.setFixedHeight(int(shell("toolbar_height")))
@@ -542,7 +558,7 @@ class DeaiApp(QWidget):
         self._output_view = 1
         self.output_view.select(1, notify=False)
         self.output.set_text("")
-        self.output.set_metrics("—", "—", "生成中")
+        self.output.set_metrics("—", "—", "—")
         self.rewrite_button.setText("停止生成")
         self.check_button.setEnabled(False)
         self.settings_button.setEnabled(False)
@@ -715,7 +731,7 @@ class DeaiApp(QWidget):
             self._stream_text = ""
             self.output.set_text("")
         self.progress_label.setText(f"第 {index}/{self._settings.max_rounds} 轮")
-        self._say(f"第 {index} 轮生成中……")
+        self._say("生成中 · 等流式输出，Esc 可停止")
 
     def _on_delta(self, piece: str) -> None:
         self._stream_text += piece
