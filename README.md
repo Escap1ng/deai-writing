@@ -1,19 +1,29 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.png">
-  <img alt="降 AI 写作门禁：词表、结构、字符三道可执行门禁" src="assets/hero-light.png" width="1000">
-</picture>
+<p align="center">
+  <img src="assets/icon.png" width="88" height="88" alt="deai-writing 图标">
+</p>
 
-[中文](README.md) | [English](README.en.md)
+<h1 align="center">deai-writing</h1>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.png">
+    <img alt="deai-writing：词表、结构、字符三道可执行门禁" src="assets/hero-light.png" width="1000">
+  </picture>
+</p>
+
+<p align="center"><a href="README.md">中文</a> | <a href="README.en.md">English</a></p>
+
+<p align="center">
+  <a href="https://github.com/Escap1ng/deai-writing/releases/tag/v0.1.0"><img alt="release" src="https://img.shields.io/badge/release-v0.1.0-0B63C5?style=flat-square&amp;labelColor=14171A"></a>
+  <img alt="python" src="https://img.shields.io/badge/python-3.13%20%7C%203.14-0B63C5?style=flat-square&amp;labelColor=14171A">
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0B63C5?style=flat-square&amp;labelColor=14171A"></a>
+  <img alt="gates" src="https://img.shields.io/badge/gates-3-0B63C5?style=flat-square&amp;labelColor=14171A">
+  <img alt="rules" src="https://img.shields.io/badge/rules-21-0B63C5?style=flat-square&amp;labelColor=14171A">
+  <img alt="self-check" src="https://img.shields.io/badge/self--check-12%20assertions-1A7F37?style=flat-square&amp;labelColor=14171A">
+  <img alt="desktop" src="https://img.shields.io/badge/desktop-279%20tests-1A7F37?style=flat-square&amp;labelColor=14171A">
+</p>
 
 给中文或英文文稿过三道可执行门禁：词表查模板腔与套话，结构查句式与节奏，字符清零宽与 bidi 隐写。命中即退出 1，每条命中附改法；正反例固化成断言，改错就红。同一套引擎也是桌面工作台：本地体检、模型改写、学术翻译，一个窗口闭环。
-
-[![release](https://img.shields.io/badge/release-v0.1.0-0B63C5?style=flat-square&labelColor=14171A)](https://github.com/Escap1ng/deai-writing/releases/tag/v0.1.0)
-![python](https://img.shields.io/badge/python-3.13%20%7C%203.14-0B63C5?style=flat-square&labelColor=14171A)
-[![license](https://img.shields.io/badge/license-MIT-0B63C5?style=flat-square&labelColor=14171A)](LICENSE)
-![gates](https://img.shields.io/badge/gates-3-0B63C5?style=flat-square&labelColor=14171A)
-![rules](https://img.shields.io/badge/rules-21-0B63C5?style=flat-square&labelColor=14171A)
-![self-check](https://img.shields.io/badge/self--check-12%20assertions-1A7F37?style=flat-square&labelColor=14171A)
-![desktop](https://img.shields.io/badge/desktop-279%20tests-1A7F37?style=flat-square&labelColor=14171A)
 
 ## 三道门禁
 
@@ -140,9 +150,9 @@ deai-writing/
 ├── SKILL.md                       # 技能入口：定位、三道关、快速流程、强制项摘要
 ├── README.md                      # 本文件（中文）
 ├── README.en.md                   # 英文版，与 README.md 同构
-├── assets/                        # README 配图源与导出（hero 深浅两版）
+├── assets/                        # README 配图源与导出（hero 深浅两版、应用图标）
 ├── desktop/                       # 桌面应用：无边框 Qt 界面、改写与翻译、exe 打包
-│   ├── deai_app/                  #   ui / core / bridge 三层 + assets 主题与示例配置
+│   ├── deai_app/                  #   ui / core / bridge 三层 + assets（主题、图标、示例配置）
 │   ├── tests/                     #   279 项无头测试：契约、几何、动效、端到端
 │   ├── build/                     #   PyInstaller 打包清单与脚本
 │   └── screenshots/               #   界面截图（README 配图）
@@ -154,6 +164,7 @@ deai-writing/
 │   └── selfcheck.py               #   回归自检：对 examples/ 全部正反例断言期望退出码
 ├── docs/                          # 规范
 │   ├── deai-rules.md              #   降 AI 规范（唯一权威）：痕迹清单、改写规则、负面清单、个人声音保留、结构级细则、字符级清理
+│   ├── icon.html                  #   图标工坊：参数化图标预览与导出
 │   └── no-ai-slop-reference.md    #   英文参考：slop 模式清单与规则映射表（MIT，含来源 SHA 与版权声明）
 └── examples/                      # 可复现示例
     ├── clean-sample.md            #   中文正例：词表级与结构级都应零命中
