@@ -1,19 +1,29 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.png">
-  <img alt="De-AI writing gates: three runnable gates for word list, structure and characters" src="assets/hero-light.png" width="1000">
-</picture>
+<p align="center">
+  <img src="assets/icon.png" width="88" height="88" alt="deai-writing icon">
+</p>
 
-[中文](README.md) | English
+<h1 align="center">deai-writing</h1>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.png">
+    <img alt="deai-writing: three runnable gates for word list, structure and characters" src="assets/hero-light.png" width="1000">
+  </picture>
+</p>
+
+<p align="center"><a href="README.md">中文</a> | English</p>
+
+<p align="center">
+  <a href="https://github.com/Escap1ng/deai-writing/releases/tag/v0.1.0"><img alt="release" src="https://img.shields.io/badge/release-v0.1.0-0B63C5?style=flat-square&amp;labelColor=14171A"></a>
+  <img alt="python" src="https://img.shields.io/badge/python-3.13%20%7C%203.14-0B63C5?style=flat-square&amp;labelColor=14171A">
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-0B63C5?style=flat-square&amp;labelColor=14171A"></a>
+  <img alt="gates" src="https://img.shields.io/badge/gates-3-0B63C5?style=flat-square&amp;labelColor=14171A">
+  <img alt="rules" src="https://img.shields.io/badge/rules-21-0B63C5?style=flat-square&amp;labelColor=14171A">
+  <img alt="self-check" src="https://img.shields.io/badge/self--check-12%20assertions-1A7F37?style=flat-square&amp;labelColor=14171A">
+  <img alt="desktop" src="https://img.shields.io/badge/desktop-279%20tests-1A7F37?style=flat-square&amp;labelColor=14171A">
+</p>
 
 Three runnable gates for any Chinese or English draft: the word list catches template openers and filler, the structure checker catches sentence rhythm and repetition, and the character cleaner removes zero-width and bidi watermarks. Any hit exits 1 and prints a fix; the fixtures are pinned as assertions, so a wrong edit turns red. The same engine ships as a desktop workbench: local checks, model rewrite and academic translation, closed in one window.
-
-[![release](https://img.shields.io/badge/release-v0.1.0-0B63C5?style=flat-square&labelColor=14171A)](https://github.com/Escap1ng/deai-writing/releases/tag/v0.1.0)
-![python](https://img.shields.io/badge/python-3.13%20%7C%203.14-0B63C5?style=flat-square&labelColor=14171A)
-[![license](https://img.shields.io/badge/license-MIT-0B63C5?style=flat-square&labelColor=14171A)](LICENSE)
-![gates](https://img.shields.io/badge/gates-3-0B63C5?style=flat-square&labelColor=14171A)
-![rules](https://img.shields.io/badge/rules-21-0B63C5?style=flat-square&labelColor=14171A)
-![self-check](https://img.shields.io/badge/self--check-12%20assertions-1A7F37?style=flat-square&labelColor=14171A)
-![desktop](https://img.shields.io/badge/desktop-279%20tests-1A7F37?style=flat-square&labelColor=14171A)
 
 ## The three gates
 
@@ -140,9 +150,9 @@ deai-writing/
 ├── SKILL.md                       # Entry point: scope, three gates, quick flow, hard requirements
 ├── README.md                      # Chinese README
 ├── README.en.md                   # This file: the same structure in English
-├── assets/                        # README figure sources and exports (hero, light and dark)
+├── assets/                        # README figure sources and exports (hero, light and dark; app icon)
 ├── desktop/                       # Desktop app: frameless Qt UI, rewrite and translation, exe build
-│   ├── deai_app/                  #   ui / core / bridge layers plus assets (theme, example providers)
+│   ├── deai_app/                  #   ui / core / bridge layers plus assets (theme, icon, example providers)
 │   ├── tests/                     #   279 headless tests: contracts, geometry, motion, end-to-end
 │   ├── build/                     #   PyInstaller manifest and build scripts
 │   └── screenshots/               #   UI screenshots used by the READMEs
@@ -154,6 +164,7 @@ deai-writing/
 │   └── selfcheck.py               #   Regression self-check: asserts the expected exit code of every fixture
 ├── docs/                          # Specifications
 │   ├── deai-rules.md              #   Chinese rules, the authoritative source: hint list, rewrite rules, negative list, voice preservation, structural details, character cleaning
+│   ├── icon.html                  #   Icon workshop: parametric preview and export
 │   └── no-ai-slop-reference.md    #   English reference: slop pattern catalogue and rule mapping (MIT, source SHA and notice kept)
 └── examples/                      # Reproducible fixtures
     ├── clean-sample.md            #   Chinese positive: both checkers must report zero

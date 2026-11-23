@@ -2,67 +2,80 @@
 <html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<title>降 AI 写作门禁</title>
+<title>deai-writing</title>
 <style>
   :root{
-    --bg-a:#FFFFFF; --bg-b:#F4F5F7; --bg-c:#E9F0FB;
-    --glow:rgba(11,99,197,.12);
-    --text:#14171A; --text-2:#4E5661; --text-3:#7A828C;
-    --line:#E7E9ED; --surface:#FFFFFF;
-    --accent:#0B63C5; --accent-soft:#DCE9FD;
-    --pass:#1A7F37; --warn:#9A6700;
+    --bg-a:#FFFFFF; --bg-b:#F3F6FB; --bg-c:#EAF1FA;
+    --text:#14171A; --text-2:#46505C; --text-3:#636C78;
+    --line:#E3E8EF; --surface:#FFFFFF;
+    --blue:#0B63C5; --blue-soft:#DCE9FD;
+    --amber:#9A6700; --amber-soft:#FBEFD3;
+    --green:#1A7F37; --green-soft:#DCF2E3;
+    --glow-b:rgba(11,99,197,.16); --glow-a:rgba(154,103,0,.10); --glow-g:rgba(26,127,55,.10);
+    --ring:rgba(11,99,197,.06);
     --serif:"Noto Serif SC","Source Han Serif SC","STSong","SimSun",serif;
     --sans:"Microsoft YaHei UI","Noto Sans SC","Segoe UI",system-ui,sans-serif;
+    --mono:"Consolas","SF Mono",monospace;
   }
   html[data-theme="dark"]{
-    --bg-a:#14171A; --bg-b:#191E25; --bg-c:#15243C;
-    --glow:rgba(111,177,255,.16);
-    --text:#F4F5F7; --text-2:#B9C2CF; --text-3:#8B93A0;
-    --line:#333A44; --surface:#1F2328;
-    --accent:#6FB1FF; --accent-soft:#1C3A5E;
-    --pass:#4CC38A; --warn:#E3B341;
+    --bg-a:#141518; --bg-b:#16181B; --bg-c:#181A1E;
+    --text:#F1EFEA; --text-2:#A9A7A1; --text-3:#8C8A83;
+    --line:#2E3136; --surface:#1B1D21;
+    --blue:#8FB4E0; --blue-soft:#232D38;
+    --amber:#C9A15A; --amber-soft:#2A251C;
+    --green:#7FAE8C; --green-soft:#1B2620;
+  }
+  html[data-theme="dark"] body{
+    background:linear-gradient(180deg, #141518 0%, #17191C 100%);
+  }
+  html[data-theme="dark"] .chip{
+    background:transparent; border-color:var(--line);
+  }
+  html[data-theme="dark"] .rule{
+    width:360px; height:1px; margin-left:-180px; background:var(--line);
   }
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{width:1000px;height:320px;overflow:hidden}
+  html,body{width:1000px;height:360px;overflow:hidden}
   body{
-    font-family:var(--sans); color:var(--text);
+    font-family:var(--sans); color:var(--text); position:relative;
     background:
-      radial-gradient(560px 300px at 88% -10%, var(--glow), transparent 70%),
-      linear-gradient(135deg, var(--bg-a) 0%, var(--bg-b) 58%, var(--bg-c) 100%);
+      radial-gradient(440px 240px at 50% -10%, var(--glow-b), transparent 70%),
+      radial-gradient(360px 220px at 6% 108%, var(--glow-a), transparent 72%),
+      radial-gradient(360px 220px at 94% 108%, var(--glow-g), transparent 72%),
+      repeating-radial-gradient(circle at 50% 46%, transparent 0 46px, var(--ring) 46px 47px),
+      linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 62%, var(--bg-c) 100%);
     -webkit-font-smoothing:antialiased;
-    position:relative;
   }
-  .wrap{position:absolute; inset:0; padding:44px 52px 40px; display:flex; flex-direction:column;}
-  .kicker{display:flex; align-items:center; gap:12px; margin-bottom:14px;}
-  .bar{width:6px; height:22px; border-radius:3px; background:var(--accent);}
-  .kicker span{font-size:14px; letter-spacing:.32em; color:var(--accent); font-weight:600;}
-  h1{font-family:var(--serif); font-weight:900; font-size:60px; line-height:1.12; letter-spacing:.02em;}
-  .sub{margin-top:14px; font-size:19px; line-height:1.5; color:var(--text-2); max-width:760px;}
-  .chips{margin-top:auto; display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
-  .chip{
-    display:inline-flex; align-items:center; gap:9px;
-    background:var(--surface); border:1px solid var(--line);
-    border-radius:999px; padding:9px 16px; font-size:15px; color:var(--text-2);
-  }
+  .wrap{position:absolute; inset:0; padding:30px 52px 34px; display:flex; flex-direction:column;
+        align-items:center; justify-content:center; text-align:center;}
+  .kicker{font-size:13px; letter-spacing:.34em; color:var(--blue); font-weight:600; margin-bottom:12px;}
+  h1{font-family:"Noto Serif SC","Noto Serif","Georgia",serif; font-weight:700; font-size:60px;
+     line-height:1.1; letter-spacing:.005em;}
+  h1 .hy{color:var(--blue);}
+  .sub{margin-top:14px; font-size:18px; line-height:1.55; color:var(--text-2); max-width:760px;}
+  .chips{margin-top:22px; display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap;}
+  .chip{display:inline-flex; align-items:center; gap:9px; background:var(--surface);
+        border:1px solid var(--line); border-radius:999px; padding:8px 16px; font-size:15px; color:var(--text-2);}
   .chip b{color:var(--text); font-weight:600;}
   .dot{width:8px; height:8px; border-radius:50%;}
-  .dot.a{background:var(--accent)} .dot.p{background:var(--pass)} .dot.w{background:var(--warn)}
-  .chip.app{margin-left:auto; border-color:var(--accent); color:var(--text);}
-  .rule{position:absolute; left:52px; right:52px; bottom:0; height:3px; border-radius:3px 3px 0 0;
-        background:linear-gradient(90deg, var(--accent), transparent 72%);}
+  .dot.b{background:var(--blue)} .dot.a{background:var(--amber)} .dot.g{background:var(--green)}
+  .readout{margin-top:16px; font-family:var(--mono); font-size:13px; color:var(--text-3); letter-spacing:.02em;}
+  .readout b{color:var(--text-2); font-weight:600;}
+  .rule{position:absolute; left:50%; bottom:0; width:560px; height:3px; margin-left:-280px;
+        border-radius:3px 3px 0 0; background:linear-gradient(90deg, transparent, var(--blue) 30%, var(--amber) 55%, var(--green) 78%, transparent);}
 </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="kicker"><i class="bar"></i><span>可执行 · 可复检 · 可回归</span></div>
-    <h1>降 AI 写作门禁</h1>
+    <div class="kicker">可执行 · 可复检 · 可回归</div>
+    <h1>deai<span class="hy">-</span>writing</h1>
     <p class="sub">词表、结构、字符三道关，把模板腔、结构套路与看不见的隐写字符挡在交付之前；同一套引擎也是桌面工作台。</p>
     <div class="chips">
-      <span class="chip"><i class="dot a"></i>词表级 <b>21 条规则</b></span>
-      <span class="chip"><i class="dot w"></i>结构级 <b>6 项指标</b></span>
-      <span class="chip"><i class="dot p"></i>字符级 <b>清理后复检</b></span>
-      <span class="chip app">桌面工作台 · 体检 / 改写 / 翻译</span>
+      <span class="chip"><i class="dot b"></i>词表级 <b>21 条规则</b></span>
+      <span class="chip"><i class="dot a"></i>结构级 <b>6 项指标</b></span>
+      <span class="chip"><i class="dot g"></i>字符级 <b>清理后复检</b></span>
     </div>
+    <div class="readout">反例实测 <b>26 / 8 / 29</b> 处命中 · 正例 <b>0</b> · 自检 <b>12/12</b> · 桌面 <b>279</b> 项测试</div>
   </div>
   <div class="rule"></div>
   <script>
